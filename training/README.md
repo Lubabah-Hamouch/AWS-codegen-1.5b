@@ -10,10 +10,11 @@ responses that pass automatic format checks.
 
 1. `prepare_prompts.py` loads the source prompts, drops empties and exact duplicates, and removes
    near-duplicates of HumanEval, HumanEval+, MBPP (all splits) and MBPP+.
-2. `generate.py` samples N responses per prompt from Qwen2.5-Coder-1.5B-Instruct under the target
+2. `generate_vllm.py` (fast; separate venv, see SETUP.md) or `generate.py` (HF, slow) samples N responses per prompt from Qwen2.5-Coder-1.5B-Instruct under the target
    format system prompt (`format_spec.py`).
-3. `filter_generations.py` applies the checks in `format_checks.py` and writes passed/failed files
-   plus a per-reason report.
+3. `filter_generations.py` applies the format checks in `format_checks.py` and runs the asserts
+   embedded in each prompt (`exec_check.py`), writing passed/failed files plus a per-reason report.
+   Generation samples only from prompts that have extractable asserts (`prompts_with_tests.jsonl`).
 
 `run_test_batch.sh` runs all three on a small batch. Data and outputs live outside the repo
 (`~/work/data`, override with `PLAYGROUND_WORK`).

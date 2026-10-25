@@ -48,3 +48,25 @@ uv pip install --python ~/venvs/playground/bin/python -r training/requirements.t
 
 `python -m pip_audit` reported no known vulnerabilities at the pinned versions on 2026-10-25.
 Re-run it whenever the pins change.
+
+## vLLM for bulk generation (separate venv)
+
+`generate_vllm.py` runs in its own venv so the pinned training stack is untouched
+(vLLM pulls its own torch). Working recipe on this machine (no sudo, no gcc, no CUDA toolkit):
+
+```bash
+uv python install 3.12                      # uv-managed Python: ships Python.h; the Ubuntu one does not
+uv venv ~/venvs/vllm --python 3.12 --python-preference only-managed
+uv pip install --python ~/venvs/vllm/bin/python vllm ziglang
+mkdir -p ~/bin && printf '#!/bin/sh\nexec %s -m ziglang cc "$@"\n' ~/venvs/vllm/bin/python > ~/bin/zigcc && chmod +x ~/bin/zigcc
+
+export VLLM_USE_FLASHINFER_SAMPLER=0 CC=$HOME/bin/zigcc CXX=$HOME/bin/zigcc
+~/venvs/vllm/bin/python generate_vllm.py --out ~/work/data/gen.jsonl --limit 6000 -n 4 --eager
+```
+
+- Triton/Inductor need a C compiler; `ziglang` (pip) provides one in user space.
+- `VLLM_USE_FLASHINFER_SAMPLER=0`: FlashInfer's JIT would otherwise need `nvcc`.
+- `--eager` (no CUDA graphs): graph capture stalled for minutes on this 8 GB GPU (WDDM memory
+  oversubscription). Eager mode is still about 12x faster than HF `generate`.
+- Cold start is about 2.5-3.5 minutes (model load + compile; cached after the first run).
+- Measured: 1,200 samples in 75 s (1,809 tok/s).

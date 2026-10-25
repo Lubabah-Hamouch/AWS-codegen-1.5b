@@ -7,5 +7,5 @@ PY=${PY:-$HOME/venvs/playground/bin/python}
 OUT=$HOME/work/data/test_batch.jsonl
 $PY prepare_prompts.py | grep -E '"(kept|removed|threshold)"'
 rm -f "$OUT"
-$PY generate.py --out "$OUT" --limit "${1:-30}" -n "${2:-4}"
+$PY generate.py --prompts "$HOME/work/data/prompts_with_tests.jsonl" --out "$OUT" --limit "${1:-30}" -n "${2:-4}"
 $PY filter_generations.py "$OUT"

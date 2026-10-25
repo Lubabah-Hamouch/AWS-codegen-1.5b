@@ -22,6 +22,7 @@ from collections import Counter, defaultdict
 
 from common import SEED, SOURCE_DATASET, ensure_data_dir
 from datasets import load_dataset
+from exec_check import extract_tests
 
 # (repo, config, splits, text field)
 EVAL_SOURCES = [
@@ -110,6 +111,11 @@ def main() -> None:
     with open(out_dir / "prompts.jsonl", "w", encoding="utf-8") as f:
         for r in kept:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
+    # Prompts with an embedded assert block can be verified by execution; generation samples from these.
+    with_tests = [r for r in kept if extract_tests(r["instruction"])]
+    with open(out_dir / "prompts_with_tests.jsonl", "w", encoding="utf-8") as f:
+        for r in with_tests:
+            f.write(json.dumps(r, ensure_ascii=False) + "\n")
     top = sorted(removed, key=lambda x: -x["score"])
     near_miss = sorted(
         (
@@ -131,6 +137,7 @@ def main() -> None:
         "removed_at_each_threshold": at_threshold,
         "removed": len(removed),
         "kept": len(kept),
+        "kept_with_extractable_asserts": len(with_tests),
         "seed": SEED,
         "closest_removed": top[:8],
         "closest_kept": near_miss[:8],
