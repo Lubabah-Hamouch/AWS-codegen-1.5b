@@ -36,4 +36,4 @@ _To be filled in once the design is built and measured._
 
 ## License
 
-To be confirmed.
+Released under the [MIT License](LICENSE).
