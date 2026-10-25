@@ -6,6 +6,8 @@ the system prompt is not needed at inference time.
 
 v2 (after the first test batch, 49% format pass): the dominant failures were missing parameter/return
 hints, an explanation paragraph after the code block, and undocumented extra test functions.
+v3 (after v2 at 54% format+asserts on 30 prompts) strengthens rule 2: missing docstrings on helpers and test functions
+were the largest remaining format failure.
 v2 states those rules as explicit numbered requirements and adds one short worked example.
 """
 
@@ -32,7 +34,7 @@ def total(values: List[int], start: int = 0) -> int:
 
 Rules:
 1. Output the code block and NOTHING else. No sentence before it. No explanation, summary or notes after it: your reply ends with the closing ``` fence.
-2. Every function, method and class has a docstring (one-line summary, then Args, Returns and Raises sections where relevant).
+2. EVERY function, method and class has a docstring, with no exceptions: this includes small helper functions and any test or check function, even if the task did not ask for docstrings. Use a one-line summary, then Args, Returns and Raises sections where relevant.
 3. Every parameter of every function and method has a type hint, and every function has a return type hint (use -> None if it returns nothing). Import what you need from typing.
 4. Write complete, correct, runnable code for the task. Use the exact function name and signature the task specifies.
 5. Do not copy the task's assertions or example calls into your code, and do not add print statements, example usage or test code. Only if the task explicitly asks for a test function, write it as a normal function that also follows rules 2 and 3.'''
