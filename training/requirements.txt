@@ -1,0 +1,20 @@
+# Local training environment (WSL2 Ubuntu 24.04, Python 3.12, RTX 4060 8 GB).
+# Pinned to the versions verified by the smoke test; pip-audit reported no known
+# vulnerabilities at pin time (2026-10-25). See SETUP.md for install instructions.
+#
+# torch must come from the PyTorch index, with PyPI as the fallback for its deps:
+#   uv pip install -r requirements.txt \
+#     --index-url https://download.pytorch.org/whl/cu130 \
+#     --extra-index-url https://pypi.org/simple --index-strategy unsafe-best-match
+
+torch==2.14.1
+transformers==5.20.2
+peft==0.21.2
+bitsandbytes==0.50.2
+accelerate==1.15.0
+datasets==5.1.0
+trl==1.16.0
+huggingface_hub==2.3.0
+
+# Dev / hygiene
+pip-audit==2.10.1
