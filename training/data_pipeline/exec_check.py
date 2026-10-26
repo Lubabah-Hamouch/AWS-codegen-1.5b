@@ -43,21 +43,23 @@ def response_code(response: str) -> str | None:
     return blocks[0][1] if blocks else None
 
 
-def _limits() -> None:
-    resource.setrlimit(resource.RLIMIT_AS, (MEM_BYTES, MEM_BYTES))
-    resource.setrlimit(resource.RLIMIT_CPU, (TIMEOUT_S + 1, TIMEOUT_S + 1))
+def _limits(timeout_s: int = TIMEOUT_S, mem_bytes: int = MEM_BYTES) -> None:
+    resource.setrlimit(resource.RLIMIT_AS, (mem_bytes, mem_bytes))
+    resource.setrlimit(resource.RLIMIT_CPU, (timeout_s + 1, timeout_s + 1))
     os.setsid()
 
 
-def run_tests(code: str, tests: str) -> tuple[bool, str]:
+def run_tests(code: str, tests: str, timeout_s: int = TIMEOUT_S, mem_bytes: int = MEM_BYTES,
+              env: dict | None = None) -> tuple[bool, str]:
     """Run code+tests; return (passed, short reason: ok|assertion|error|timeout)."""
     with tempfile.TemporaryDirectory() as d:
         path = os.path.join(d, "t.py")
         with open(path, "w", encoding="utf-8") as f:
             f.write(code + "\n\n" + tests + "\n")
         try:
-            p = subprocess.run([sys.executable, "-I", path], cwd=d, env={}, capture_output=True,
-                               timeout=TIMEOUT_S, preexec_fn=_limits, stdin=subprocess.DEVNULL)
+            p = subprocess.run([sys.executable, "-I", path], cwd=d, env=env or {}, capture_output=True,
+                               timeout=timeout_s, preexec_fn=lambda: _limits(timeout_s, mem_bytes),
+                               stdin=subprocess.DEVNULL)
         except subprocess.TimeoutExpired:
             return False, "timeout"
     if p.returncode == 0:
@@ -65,6 +67,6 @@ def run_tests(code: str, tests: str) -> tuple[bool, str]:
     return False, "assertion" if b"AssertionError" in p.stderr else "error"
 
 
-def run_many(jobs: list[tuple[str, str]], workers: int = 8) -> list[tuple[bool, str]]:
+def run_many(jobs: list[tuple[str, str]], workers: int = 8, **kw) -> list[tuple[bool, str]]:
     with ThreadPoolExecutor(workers) as ex:
-        return list(ex.map(lambda j: run_tests(*j), jobs))
+        return list(ex.map(lambda j: run_tests(*j, **kw), jobs))
