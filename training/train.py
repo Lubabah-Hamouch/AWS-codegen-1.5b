@@ -100,6 +100,7 @@ def main() -> None:
     ap.add_argument("--n-eval", type=int, default=150)
     ap.add_argument("--eval-steps", type=int, default=50)
     ap.add_argument("--save-steps", type=int, default=50, help="same as eval-steps so every eval point has a checkpoint")
+    ap.add_argument("--resume", default=None, help="checkpoint dir to resume from (weights, optimizer, scheduler, data order)")
     ap.add_argument("--no-gen", action="store_true", help="skip before/after sample generations")
     args = ap.parse_args()
 
@@ -122,7 +123,14 @@ def main() -> None:
     model.print_trainable_parameters()
 
     gen_prompts = [r["messages"][0]["content"] for r in eval_rows[:N_HELD_OUT_PROMPTS]] + EXTRA_PROMPTS
-    before = [] if args.no_gen else sample_generations(model, tok, gen_prompts, adapter=False)
+    before_path = out / "samples_before.json"
+    if args.no_gen:
+        before = []
+    elif before_path.exists():  # resuming: greedy base-model outputs are deterministic, don't redo them
+        before = json.loads(before_path.read_text(encoding="utf-8"))
+    else:
+        before = sample_generations(model, tok, gen_prompts, adapter=False)
+        before_path.write_text(json.dumps(before, indent=2, ensure_ascii=False), encoding="utf-8")
 
     steps_per_epoch = len(train_ds) // (args.batch * args.accum)
     total = args.max_steps if args.max_steps > 0 else int(steps_per_epoch * args.epochs)
@@ -157,7 +165,7 @@ def main() -> None:
                       data_collator=Collator(tok.pad_token_id), callbacks=[PeakMemLog()])
     torch.cuda.reset_peak_memory_stats()
     t0 = time.time()
-    result = trainer.train()
+    result = trainer.train(resume_from_checkpoint=args.resume)
     train_s = time.time() - t0
 
     model.save_pretrained(out / "adapter")
