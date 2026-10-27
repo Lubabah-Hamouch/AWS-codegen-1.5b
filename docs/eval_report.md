@@ -104,7 +104,11 @@ Reading it:
 - **Merged bf16 is the best row (70.1 / 66.5)**, but its lead over the base is also inside the noise
   (p = 0.26 / 0.08). The earlier NF4 + runtime adapter row (65.9 / 61.6) scored lower than the merged
   model, so merging into bf16 is not equivalent to the NF4 + adapter model that was trained and
-  validated. We do not claim the fine-tune improved correctness.
+  validated. We do not claim the fine-tune improved correctness. The gap is about the size of the 4-bit
+  penalty already measured on the base model: NF4 → bf16 is +4.2 / +4.9 points (HumanEval / HumanEval+)
+  for the fine-tune (65.9 → 70.1, 61.6 → 66.5) and +6.1 / +4.8 for the base (59.1 → 65.2, 54.3 → 59.1),
+  so it is consistent with NF4 quantisation cost rather than a real capability difference. This is
+  arithmetic on existing runs, not a controlled test; each gap is 7–10 tasks, within the noise at n=164.
 - **Format survives quantisation** (99.4% vs 100%), and the mean length is unchanged (167 tokens).
 - Batch-size sensitivity: the merged bf16 run matched single-sequence decoding on 10/10 spot checks (the
   GGUF run was not checked this way).
