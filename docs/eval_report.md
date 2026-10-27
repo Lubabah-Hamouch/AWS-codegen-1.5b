@@ -1,6 +1,6 @@
 # Evaluation report: format fine-tune of Qwen2.5-Coder-1.5B-Instruct
 
-Model under test: QLoRA adapter, **checkpoint-250** (end of epoch 1, lowest validation loss), on
+Model under test: QLoRA adapter, **checkpoint-250** (step 250 of 273 in epoch 1, i.e. 0.91 epochs; lowest validation loss), on
 Qwen2.5-Coder-1.5B-Instruct. Benchmarks: HumanEval and HumanEval+ (164 tasks each), pass@1.
 
 ## Summary
@@ -66,6 +66,56 @@ format, and as correct as the base.
 | base NF4 | HumanEval+ | 25 | 13 | 0.07 |
 
 With 164 tasks the 95% interval on one pass@1 figure is about ±7 points.
+
+## Exported model: merged bf16 and Q4_K_M GGUF
+
+The adapter was trained on top of NF4 weights but is shipped merged into the **bf16** base, then quantised
+to **Q4_K_M** (llama.cpp b11856, 986 MB; 3.09 GB as f16). The merge was checked by comparing next-token
+logits with and without the merged adapter on 3 prompts (same top-1, top-5 overlap 5/5, max logit
+difference 0.22–0.25). The table above is not the shipped model (NF4 + runtime adapter); these three are
+directly comparable. Same prompts, greedy, max 768 new tokens, seed 42. The GGUF was served with
+`llama-server` on CPU (12 threads, 4 parallel slots, `--jinja`); its chat template was checked against the
+HF template for the first 20 tasks (0 mismatches).
+
+| | base bf16 | **ckpt-250 merged, bf16** | **ckpt-250 merged, Q4_K_M GGUF** |
+|---|---|---|---|
+| HumanEval pass@1 | 65.2% (107/164) | **70.1%** (115/164) | 64.0% (105/164) |
+| HumanEval+ pass@1 | 59.1% (97/164) | **66.5%** (109/164) | 61.0% (100/164) |
+| HumanEval, definitions only | 66.5% | 70.1% | 64.0% |
+| HumanEval+, definitions only | 61.0% | 66.5% | 61.0% |
+| Format-clean | 5.5% (9/164) | 100% (164/164) | 99.4% (163/164) |
+| Stopped on its own | 99.4% | 100% | 100% |
+| Mean response tokens | 300 | 167 | 167 |
+
+The one GGUF format failure is a missing return type hint; all other checks pass.
+
+| Paired comparison (per task) | only the first passes | only the second passes | exact McNemar p |
+|---|---|---|---|
+| merged bf16 vs base bf16, HumanEval | 23 | 15 | 0.26 |
+| merged bf16 vs base bf16, HumanEval+ | 26 | 14 | 0.08 |
+| Q4_K_M vs merged bf16, HumanEval | 12 (Q4_K_M) | 22 (bf16) | 0.12 |
+| Q4_K_M vs merged bf16, HumanEval+ | 13 (Q4_K_M) | 22 (bf16) | 0.18 |
+
+Reading it:
+- **Quantisation cost: −6.1 points HumanEval, −5.5 HumanEval+ against merged bf16.** Not significant at
+  n=164 (p = 0.12 and 0.18), but the direction is consistent with the ~6-point loss seen for 4-bit NF4 and
+  should be treated as real. Against the *base* bf16 the GGUF is −1.2 HumanEval and +1.8 HumanEval+, i.e.
+  level with the original model, in the target format.
+- **Merged bf16 is the best row (70.1 / 66.5)**, but its lead over the base is also inside the noise
+  (p = 0.26 / 0.08). The earlier NF4 + runtime adapter row (65.9 / 61.6) scored lower than the merged
+  model, so merging into bf16 is not equivalent to the NF4 + adapter model that was trained and
+  validated. We do not claim the fine-tune improved correctness.
+- **Format survives quantisation** (99.4% vs 100%), and the mean length is unchanged (167 tokens).
+- Batch-size sensitivity: the merged bf16 run matched single-sequence decoding on 10/10 spot checks (the
+  GGUF run was not checked this way).
+- Throughput (CPU, this PC, 12 threads): 19 tokens/s generation, 71 tokens/s prompt processing in the
+  single-stream smoke test; the full 164-task run took 15 min with 4 parallel slots. Model load took 32 s
+  from a cold file cache.
+
+Reproduce: `python training/export/merge_adapter.py ...`, convert and quantise with llama.cpp
+(`convert_hf_to_gguf.py --outtype f16`, then `llama-quantize ... Q4_K_M`), then
+`python humaneval_eval.py gen --config gguf_q4km --gguf <file>`, `score --config gguf_q4km`, and
+`python report_tables.py base_bf16 merged_bf16 gguf_q4km`.
 
 ## Examples
 
@@ -149,8 +199,8 @@ cannot find a paraphrased problem with different code.
   small numeric differences already change individual answers.
 - **The +6.8 points over the NF4 base is mostly quantisation, not fine-tuning.** The 4-bit base loses about
   6 points against bf16. The adapter was trained on top of the 4-bit weights, so it can plausibly compensate for that damage
-  (not tested directly); the fair "did we regress" comparison is against bf16, where the change is zero. If the final model is merged or
-  served in a different precision than it was evaluated in, these numbers need re-measuring.
+  (not tested directly); the fair "did we regress" comparison is against bf16, where the change is zero. The model was
+  then merged and quantised for serving, and re-measured: see "Exported model" above.
 - **Expected:** this was a format-adaptation fine-tune on ~4.4k self-generated, assert-filtered examples, not
   a capability fine-tune. Unchanged correctness is the expected outcome; a large gain would have been
   suspicious.

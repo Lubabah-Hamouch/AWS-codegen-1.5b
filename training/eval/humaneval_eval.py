@@ -7,7 +7,9 @@
 Configs (all use the same chat template, the same user message and NO format system prompt):
   base_bf16  Qwen2.5-Coder-1.5B-Instruct, bf16           the reference number
   base_nf4   same weights, 4-bit NF4 (the training-time quantisation)
-  ckpt250    base_nf4 + LoRA checkpoint-250
+  ckpt250    base_nf4 + LoRA checkpoint-250 (adapter applied at runtime)
+  merged_bf16  checkpoint-250 merged into the bf16 base (standalone model, HF transformers)
+  gguf_q4km  the merged model as a Q4_K_M GGUF, served by llama.cpp's llama-server on CPU
 
 pass@1 is greedy (one sample per task, do_sample=False), so the seed only fixes library RNGs.
 Each task is generated once from the original HumanEval prompt and executed against both the
@@ -36,7 +38,9 @@ from format_checks import check_response, extract_blocks  # noqa: E402
 OUT = Path.home() / "work" / "eval"
 SEED = 42
 ADAPTER = Path.home() / "work" / "runs" / "v1" / "checkpoints" / "checkpoint-250"
-CONFIGS = ("base_bf16", "base_nf4", "ckpt250")
+CONFIGS = ("base_bf16", "base_nf4", "ckpt250", "merged_bf16", "gguf_q4km")
+MERGED = Path.home() / "work" / "export" / "merged_ckpt250"
+LLAMA_SERVER = next(iter(sorted((Path.home() / "work" / "llamacpp" / "bin").glob("llama-*/llama-server"))), None)
 EXEC_ENV = {"OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1"}
 TIMEOUT = {"base": 10, "plus": 40}  # HumanEval+ has up to ~500 KB of test inputs per task
 MEM = 4 << 30
@@ -70,11 +74,11 @@ def generate(config: str, check_bs1: int, batch: int, max_new_tokens: int) -> No
     set_seed(SEED)
     tok = AutoTokenizer.from_pretrained(BASE_MODEL, padding_side="left")
     kw = {"dtype": torch.bfloat16, "device_map": {"": 0}}
-    if config != "base_bf16":
+    if config in ("base_nf4", "ckpt250"):
         kw["quantization_config"] = BitsAndBytesConfig(
             load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=torch.bfloat16,
             bnb_4bit_use_double_quant=True)
-    model = AutoModelForCausalLM.from_pretrained(BASE_MODEL, **kw)
+    model = AutoModelForCausalLM.from_pretrained(str(MERGED) if config == "merged_bf16" else BASE_MODEL, **kw)
     if config == "ckpt250":
         from peft import PeftModel
 
@@ -122,6 +126,82 @@ def generate(config: str, check_bs1: int, batch: int, max_new_tokens: int) -> No
         {"config": config, "seed": SEED, "greedy": True, "max_new_tokens": max_new_tokens, "batch": batch,
          "gen_seconds": round(gen_s, 1), "bs1_agreement": agree, "records": recs}, indent=1, ensure_ascii=False),
         encoding="utf-8")
+
+
+# --------------------------------------------------------------------------- GGUF via llama-server
+def generate_gguf(gguf: str, threads: int, parallel: int, max_new_tokens: int) -> None:
+    """Greedy generation from a GGUF with llama.cpp's llama-server (CPU), using the chat template stored in
+    the GGUF. Also checks that the server renders the prompt exactly like the HF tokenizer does."""
+    import subprocess
+    import urllib.request
+    from concurrent.futures import ThreadPoolExecutor
+
+    from transformers import AutoTokenizer
+
+    from common import BASE_MODEL
+
+    assert LLAMA_SERVER is not None, "llama-server not found under ~/work/llamacpp/bin"
+    port = 8089
+    log = open(OUT / "llama_server.log", "w")
+    env = {"LD_LIBRARY_PATH": f"{LLAMA_SERVER.parent}:{LLAMA_SERVER.parents[2] / 'lib'}", "PATH": "/usr/bin:/bin"}
+    srv = subprocess.Popen([str(LLAMA_SERVER), "-m", gguf, "--port", str(port), "--host", "127.0.0.1",
+                            "-t", str(threads), "--parallel", str(parallel), "-c", str(2048 * parallel),
+                            "--jinja", "--no-webui"], stdout=log, stderr=log, env=env)
+
+    def post(path: str, body: dict, timeout: int = 900) -> dict:
+        req = urllib.request.Request(f"http://127.0.0.1:{port}{path}", json.dumps(body).encode(),
+                                     {"Content-Type": "application/json"})
+        return json.load(urllib.request.urlopen(req, timeout=timeout))
+
+    try:
+        for _ in range(180):  # wait for the model to load
+            try:
+                urllib.request.urlopen(f"http://127.0.0.1:{port}/health", timeout=2)
+                break
+            except Exception:
+                if srv.poll() is not None:
+                    raise RuntimeError("llama-server exited; see llama_server.log")
+                time.sleep(2)
+        tok = AutoTokenizer.from_pretrained(BASE_MODEL)
+        tasks = load_tasks()
+        # Prompt equivalence: the GGUF's template must render the same text as the HF tokenizer.
+        mism = 0
+        for t in tasks[:20]:
+            msgs = [{"role": "user", "content": user_message(t["prompt"])}]
+            hf = tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True)
+            got = post("/apply-template", {"messages": msgs})["prompt"]
+            mism += hf != got
+        print(f"[gguf_q4km] prompt template mismatches vs HF (first 20 tasks): {mism}", flush=True)
+        assert mism == 0, "GGUF chat template differs from the HF template"
+
+        def one(i: int) -> dict:
+            r = post("/v1/chat/completions", {"messages": [{"role": "user", "content": user_message(tasks[i]["prompt"])}],
+                                              "temperature": 0, "top_k": 1, "seed": SEED, "max_tokens": max_new_tokens})
+            ch = r["choices"][0]
+            return {"response": ch["message"]["content"], "hit_eos": ch["finish_reason"] == "stop",
+                    "n_tokens": r["usage"]["completion_tokens"]}
+
+        t0 = time.time()
+        results = {}
+        with ThreadPoolExecutor(parallel) as ex:
+            for n, (i, res) in enumerate(zip(range(len(tasks)), ex.map(one, range(len(tasks)))), 1):
+                results[i] = res
+                if n % 8 == 0:
+                    print(f"[gguf_q4km] {n}/{len(tasks)}  {time.time() - t0:.0f}s", flush=True)
+        gen_s = time.time() - t0
+    finally:
+        srv.terminate()
+        try:
+            srv.wait(timeout=20)
+        except Exception:
+            srv.kill()
+
+    OUT.mkdir(parents=True, exist_ok=True)
+    recs = [{"task_id": t["task_id"], **results[i]} for i, t in enumerate(tasks)]
+    (OUT / "gen_gguf_q4km.json").write_text(json.dumps(
+        {"config": "gguf_q4km", "seed": SEED, "greedy": True, "max_new_tokens": max_new_tokens, "parallel_slots": parallel,
+         "threads": threads, "gguf": gguf, "llama_server": str(LLAMA_SERVER), "gen_seconds": round(gen_s, 1),
+         "bs1_agreement": None, "records": recs}, indent=1, ensure_ascii=False), encoding="utf-8")
 
 
 # --------------------------------------------------------------------------- scoring
@@ -239,8 +319,13 @@ def main() -> None:
     ap.add_argument("--check-bs1", type=int, default=0)
     ap.add_argument("--batch", type=int, default=8)
     ap.add_argument("--max-new-tokens", type=int, default=768)
+    ap.add_argument("--gguf", help="path to the .gguf (config gguf_q4km)")
+    ap.add_argument("--threads", type=int, default=12)
+    ap.add_argument("--parallel", type=int, default=4, help="llama-server slots (concurrent requests)")
     a = ap.parse_args()
-    if a.stage == "gen":
+    if a.stage == "gen" and a.config == "gguf_q4km":
+        generate_gguf(a.gguf, a.threads, a.parallel, a.max_new_tokens)
+    elif a.stage == "gen":
         generate(a.config, a.check_bs1, a.batch, a.max_new_tokens)
     elif a.stage == "score":
         score(a.config)
