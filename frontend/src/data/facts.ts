@@ -51,7 +51,7 @@ export const BUDGET = {
 export const EVAL = {
   humaneval: 64.0,
   humanevalPlus: 61.0,
-  formatClean: 99.4,
+  formatClean: 98.8, // 162/164; was 99.4 before the type-hint import check (docs/eval_report.md, 2026-10-28)
   eos: 100,
   meanTokens: 167,
   noisePt: 7,
@@ -62,7 +62,7 @@ export const EVAL = {
   exported: [
     ["HumanEval pass@1", "65.2% (107/164)", "70.1% (115/164)", "64.0% (105/164)"],
     ["HumanEval+ pass@1", "59.1% (97/164)", "66.5% (109/164)", "61.0% (100/164)"],
-    ["Format-clean", "5.5% (9/164)", "100% (164/164)", "99.4% (163/164)"],
+    ["Format-clean", "5.5% (9/164)", "100% (164/164)", "98.8% (162/164)"],
     ["Stopped on its own", "99.4%", "100%", "100%"],
     ["Mean response tokens", "300", "167", "167"],
   ],
@@ -70,6 +70,7 @@ export const EVAL = {
     ["Prose after the code block", "154", "0"],
     ["Prose before the code block", "53", "0"],
     ["Missing return type hint", "115", "0"],
+    ["Type-hint name not imported", "0", "1"],
     ["Missing parameter type hint", "104", "0"],
     ["Missing docstring", "98", "0"],
   ],

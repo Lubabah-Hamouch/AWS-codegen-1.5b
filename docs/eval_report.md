@@ -5,13 +5,21 @@ Qwen2.5-Coder-1.5B-Instruct. Benchmarks: HumanEval and HumanEval+ (164 tasks eac
 
 ## Summary
 
-- **Format compliance went from 0.6–5.5% to 100%.** Every fine-tuned response is one fenced block with
-  docstrings and full type hints, and it stops on its own.
+- **Format compliance went from 0.6–5.5% to 99.4%.** All but one fine-tuned response is one fenced block with
+  docstrings and full type hints that import every name they use, and every one stops on its own. The exception,
+  HumanEval/136, uses `Optional` in a type hint without importing it.
 - **Correctness did not change measurably.** Against the same-precision (bf16) base: HumanEval 65.2% → 65.9%,
   HumanEval+ 59.1% → 61.6%. Task-level flips are 18 gained vs 17 lost (exact McNemar p = 1.0).
 - **No regression**, which is what a format-adaptation fine-tune should show. The 4-bit base scores lower
   (59.1%) than the bf16 base; the adapter brings the 4-bit model back to bf16 level. See "What this does and
   doesn't show" before reading anything into the +6.8 points over the 4-bit base.
+
+> **Changed 2026-10-28: format-clean figures re-scored.** The format check gained a rule: every name used in a type
+> hint must be imported or defined (see "Failure analysis" below). HumanEval/136's answer uses `Optional` without
+> importing it, which raises a NameError when the function is defined; the old check passed it. Re-scoring the saved
+> answers with the extended check moves checkpoint-250 from 100% to 99.4% (163/164) and the shipped Q4_K_M GGUF from
+> 99.4% to **98.8% (162/164)**. Base and merged runs have no such answers and are unchanged; pass@1 is unchanged
+> everywhere (the tests were re-run). The site, README and model card show the new figures.
 
 ## Results
 
@@ -25,7 +33,7 @@ decoding, max 768 new tokens, seed 42.
 | HumanEval+ pass@1 | 59.1% (97/164) | 54.3% (89/164) | **61.6%** (101/164) |
 | HumanEval pass@1, definitions only* | 66.5% | 59.8% | 65.9% |
 | HumanEval+ pass@1, definitions only* | 61.0% | 54.9% | 61.6% |
-| Format-clean responses | 5.5% (9/164) | 0.6% (1/164) | **100%** (164/164) |
+| Format-clean responses | 5.5% (9/164) | 0.6% (1/164) | **99.4%** (163/164) |
 | Stopped on its own (EOS) | 99.4% | 99.4% | 100% |
 | Mean response length (tokens) | 300 | 364 | 164 |
 
@@ -43,6 +51,7 @@ comparison is not an artefact of that.
 | Missing return type hint | 115 | 119 | 0 |
 | Missing parameter type hint | 104 | 103 | 0 |
 | Missing docstring | 98 | 117 | 0 |
+| Type-hint name not imported | 0 | 0 | 1 |
 | Multiple code blocks / truncated / other | 1 | 8 | 0 |
 
 **Format × correctness (HumanEval)**
@@ -51,10 +60,10 @@ comparison is not an artefact of that.
 |---|---|---|---|---|
 | base bf16 | 9 | 0 | 98 | 57 |
 | base NF4 | 1 | 0 | 96 | 67 |
-| checkpoint-250 | 108 | 56 | 0 | 0 |
+| checkpoint-250 | 108 | 55 | 0 | 1 |
 
-The base model is usually correct but almost never in the target format; the fine-tuned model is always in
-format, and as correct as the base.
+The base model is usually correct but almost never in the target format; the fine-tuned model is in format on all
+but one task, and as correct as the base.
 
 **Paired comparison** (checkpoint-250 vs base, per task)
 
@@ -83,11 +92,12 @@ HF template for the first 20 tasks (0 mismatches).
 | HumanEval+ pass@1 | 59.1% (97/164) | **66.5%** (109/164) | 61.0% (100/164) |
 | HumanEval, definitions only | 66.5% | 70.1% | 64.0% |
 | HumanEval+, definitions only | 61.0% | 66.5% | 61.0% |
-| Format-clean | 5.5% (9/164) | 100% (164/164) | 99.4% (163/164) |
+| Format-clean | 5.5% (9/164) | 100% (164/164) | 98.8% (162/164) |
 | Stopped on its own | 99.4% | 100% | 100% |
 | Mean response tokens | 300 | 167 | 167 |
 
-The one GGUF format failure is a missing return type hint; all other checks pass.
+The two GGUF format failures are a missing return type hint and HumanEval/136's unimported `Optional`; all other
+checks pass.
 
 | Paired comparison (per task) | only the first passes | only the second passes | exact McNemar p |
 |---|---|---|---|
@@ -109,7 +119,7 @@ Reading it:
   for the fine-tune (65.9 → 70.1, 61.6 → 66.5) and +6.1 / +4.8 for the base (59.1 → 65.2, 54.3 → 59.1),
   so it is consistent with NF4 quantisation cost rather than a real capability difference. This is
   arithmetic on existing runs, not a controlled test; each gap is 7–10 tasks, within the noise at n=164.
-- **Format survives quantisation** (99.4% vs 100%), and the mean length is unchanged (167 tokens).
+- **Format survives quantisation** (98.8% vs 100%), and the mean length is unchanged (167 tokens).
 - Batch-size sensitivity: the merged bf16 run matched single-sequence decoding on 10/10 spot checks (the
   GGUF run was not checked this way).
 - Throughput (CPU, this PC, 12 threads): 19 tokens/s generation, 71 tokens/s prompt processing in the
@@ -273,9 +283,8 @@ Fine-tuning fixed 21 tasks the base model fails and broke 19 it passes.
 - **A cheap fix with no training:** the format checks now flag any name used in a type hint that is never imported
   (`format_checks.py`, reason `unimported_hint_name`), in both the training-data filter and eval scoring. Over the
   five saved eval runs (820 answers) it flags exactly one answer per run where it applies: HumanEval/136, in the
-  shipped GGUF and in the checkpoint it came from; no false positives. Under the stricter check the shipped model's
-  format-clean rate would be 162/164 (98.8%) instead of 163/164 (99.4%); the numbers in this report use the check as
-  it was when they were measured. The SFT data had 6 such examples out of 4,535 (`Generator`, `Callable`, `Tuple`,
+  shipped GGUF and in the checkpoint it came from; no false positives. Both runs were re-scored with it: the shipped
+  model's format-clean rate is now 162/164 (98.8%, was 99.4%), checkpoint-250's 163/164 (99.4%, was 100%). The SFT data had 6 such examples out of 4,535 (`Generator`, `Callable`, `Tuple`,
   `Foo`), all in quoted annotations, which do not fail at runtime; HumanEval/136's was unquoted, which does.
 - **Tuple immutability does not show up here.** No HumanEval failure is an assignment into a tuple. The playground's
   merge_intervals recording fails exactly that way (`merged[-1][1] = ...` on a tuple), but HumanEval cannot measure it;

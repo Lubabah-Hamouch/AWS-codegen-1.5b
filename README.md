@@ -30,7 +30,7 @@ HumanEval, 164 problems, greedy decoding:
 |---|---|---|---|
 | HumanEval pass@1 | 65.2% | 70.1% | **64.0%** |
 | HumanEval+ pass@1 | 59.1% | 66.5% | **61.0%** |
-| Format-clean (one block, typed, documented) | 5.5% | 100% | **99.4%** |
+| Format-clean (one block, typed, documented) | 5.5% | 100% | **98.8%** |
 | Mean response tokens | 300 | 167 | **167** |
 
 The fine-tune's main win is **format**, not accuracy. The bf16 accuracy gains are not statistically significant on

@@ -46,7 +46,7 @@ release b11856. Chat template (ChatML) is embedded in the GGUF; use `--jinja` / 
 |---|---|---|---|
 | HumanEval | 65.2% | 70.1% | **64.0%** |
 | HumanEval+ | 59.1% | 66.5% | **61.0%** |
-| Format-clean | 5.5% | 100% | **99.4%** |
+| Format-clean | 5.5% | 100% | **98.8%** |
 | Stops on its own | 99.4% | 100% | **100%** |
 
 Quantising costs about 6 points against merged bf16 (not significant at n=164; p = 0.12 / 0.18) and leaves

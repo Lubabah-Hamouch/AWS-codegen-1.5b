@@ -160,7 +160,7 @@ export default function Notes() {
               <Bars label="HumanEval pass@1 (the shipped GGUF is highlighted)"
                 items={[["base bf16", 65.2], ["merged bf16", 70.1], ["Q4_K_M GGUF (shipped)", 64.0, true]]} />
               <Bars label="Format-clean responses: one block, docstring, type hints, clean stop"
-                items={[["base bf16", 5.5], ["merged bf16", 100], ["Q4_K_M GGUF (shipped)", 99.4, true]]} />
+                items={[["base bf16", 5.5], ["merged bf16", 100], ["Q4_K_M GGUF (shipped)", EVAL.formatClean, true]]} />
               <Table head={["", "base bf16", "merged bf16", "Q4_K_M GGUF (shipped)"]} rows={EVAL.exported} num={[1, 2, 3]} ship={3} />
               <p>
                 Read it as: <strong>the format was learned and correctness did not move.</strong> With 164 tasks one pass@1

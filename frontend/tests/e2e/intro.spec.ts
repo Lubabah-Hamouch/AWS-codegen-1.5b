@@ -43,7 +43,7 @@ test("intro: what it is, what to do and the result are in the first screen", asy
   const cta = page.getByRole("button", { name: "Watch a recorded run ▸" });
   await expect(lead).toBeVisible();
   await expect(cta).toBeVisible();
-  await expect(page.getByRole("row", { name: /Clean answers .* 5\.5% 99\.4%/ })).toBeVisible();
+  await expect(page.getByRole("row", { name: /Clean answers .* 5\.5% 98\.8%/ })).toBeVisible();
   expect(await inView(lead)).toBe(true);
   expect(await inView(cta)).toBe(true);
   if (test.info().project.name === "desktop") expect(await inView(page.getByRole("row", { name: /Answer length/ }))).toBe(true);
