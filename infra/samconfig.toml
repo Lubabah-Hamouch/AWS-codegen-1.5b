@@ -1,0 +1,12 @@
+version = 0.1
+
+[default.global.parameters]
+region = "eu-north-1"
+profile = "codegen-spike"
+
+[default.deploy.parameters]
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = false
+resolve_s3 = true
+resolve_image_repos = true
+fail_on_empty_changeset = false

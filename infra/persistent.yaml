@@ -1,0 +1,19 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Persistent state (survives backend teardown). Guardrail counters, slots, kill switch and API keys.
+
+Resources:
+  StateTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: codegen-state
+      BillingMode: PROVISIONED          # 10 RCU / 15 WCU stays inside the always-free 25 / 25
+      ProvisionedThroughput: {ReadCapacityUnits: 10, WriteCapacityUnits: 15}  # an admitted request costs ~8 WCU
+      AttributeDefinitions: [{AttributeName: pk, AttributeType: S}]
+      KeySchema: [{AttributeName: pk, KeyType: HASH}]
+      TimeToLiveSpecification: {AttributeName: ttl, Enabled: true}
+      PointInTimeRecoverySpecification: {PointInTimeRecoveryEnabled: false}
+
+Outputs:
+  TableName: {Value: !Ref StateTable}
