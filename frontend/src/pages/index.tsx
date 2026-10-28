@@ -21,7 +21,9 @@ const QUOTA_CODES = new Set(["daily_limit", "daily_capacity"]);
 export default function Playground() {
   const [run, dispatch] = useReducer(runReducer, initialRun);
   const [status, setStatus] = useState<SiteStatus>(UNKNOWN);
-  const [mode, setMode] = useState<Mode>("live");
+  // Replay is the default experience; a live request is always the visitor's explicit choice ("Try it live").
+  const [mode, setMode] = useState<Mode>("replay");
+  const [statusLoaded, setStatusLoaded] = useState(false);
   const [prompt, setPrompt] = useState(EXAMPLES[0]);
   const [replays, setReplays] = useState<ReplayIndexEntry[]>([]);
   const [replayId, setReplayId] = useState<string | null>(null);
@@ -41,6 +43,7 @@ export default function Playground() {
     setRemaining(loadRemaining());
     fetchStatus().then((s) => {
       setStatus(s);
+      setStatusLoaded(true);
       if (s.live === false) {
         // The live controls are about to be replaced; don't drop a keyboard user's focus on <body>.
         const hadFocus = document.getElementById("controls")?.contains(document.activeElement);
@@ -139,15 +142,15 @@ export default function Playground() {
     };
   }, [replayId, record]);
 
-  // First visit only: play the selected recording once, unasked, when the page settles in replay mode. Never a live
-  // run (that spends quota), never with reduced motion, never if the visitor has already started something.
+  // First visit only: play the selected recording once, unasked, once the backend status is known (live or not).
+  // Never a live run (that spends quota), never with reduced motion, never if the visitor has already started something.
   const autoplayed = useRef(false);
   useEffect(() => {
-    if (autoplayed.current || mode !== "replay" || status.live !== false || !replayId || run.phase !== "idle") return;
+    if (autoplayed.current || !statusLoaded || mode !== "replay" || !replayId || run.phase !== "idle") return;
     autoplayed.current = true;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || !claimFirstVisit()) return;
     runReplay();
-  }, [mode, status.live, replayId, run.phase, runReplay]);
+  }, [statusLoaded, mode, replayId, run.phase, runReplay]);
 
   // Bring the output into view if it is below the fold: the readouts on the wide layout, the listing once the
   // layout stacks (there the readouts are far from the code that is moving).
@@ -174,6 +177,14 @@ export default function Playground() {
     : lastCode === "daily_capacity" ? `Today's shared live budget is spent · resets in ${fmtDuration(secondsToUtcMidnight(now))}`
     : null;
 
+  // The opt-in: a real request with the prompt in U1, spending one of the visitor's live runs.
+  const tryLive = () => {
+    if (active(run) || liveBlocked) return;
+    setMode("live");
+    runLive();
+    showOutput();
+  };
+
   const onRun = () => (mode === "live" ? runLive() : runReplay());
   const retryIn = retryAt !== null ? Math.max(0, Math.ceil((retryAt - now) / 1000)) : null;
   const err: UiError | null = run.phase === "error" ? run.error : null;
@@ -186,7 +197,8 @@ export default function Playground() {
       <main className="page">
         <Masthead page="schematic" />
 
-        <Intro status={status} playing={active(run)} onWatch={watch} />
+        <Intro status={status} playing={active(run)} onWatch={watch}
+          live={status.live === true} liveBlocked={liveBlocked} remaining={remaining} onTryLive={tryLive} />
 
         {err && !QUOTA_CODES.has(err.code) && (
           <div className="banner" role="alert">

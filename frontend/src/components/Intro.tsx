@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { COMPARE } from "@/data/compare";
-import { EVAL } from "@/data/facts";
+import { BUDGET, EVAL } from "@/data/facts";
 import type { SiteStatus } from "@/lib/status";
 
 // The on-ramp: what this is, what to do, and the result, in plain words. The schematic below is the detailed view.
@@ -13,9 +13,19 @@ const FAILURE: Record<string, string> = {
   missing_return_hint: "no return type",
 };
 
-type Props = { status: SiteStatus; playing: boolean; onWatch: () => void };
+type Props = {
+  status: SiteStatus;
+  playing: boolean;
+  onWatch: () => void;
+  /** backend is on (status.json live): offer the opt-in live run */
+  live: boolean;
+  /** live cannot succeed today: shown instead of "Try it live", next to the replay button */
+  liveBlocked: string | null;
+  remaining: number | null;
+  onTryLive: () => void;
+};
 
-export function Intro({ status, playing, onWatch }: Props) {
+export function Intro({ status, playing, onWatch, live, liveBlocked, remaining, onTryLive }: Props) {
   return (
     <section className="intro" aria-labelledby="intro-h">
       <div className="intro-main">
@@ -32,8 +42,18 @@ export function Intro({ status, playing, onWatch }: Props) {
           <button type="button" className="btn-run silk" onClick={onWatch}>
             {playing ? "Playing · see output ↓" : "Watch a recorded run ▸"}
           </button>
+          {live && (liveBlocked && !playing
+            ? <span className="tp intro-blocked" role="status">{liveBlocked}</span>
+            : <button type="button" className="btn-ghost btn-live silk" onClick={onTryLive} disabled={playing}>Try it live ▸</button>)}
           <Link href="/notes/">How it was built →</Link>
         </div>
+        {live && !liveBlocked && (
+          <p className="intro-status">
+            <strong className="silk au">Live generation is on</strong>{" "}
+            Try it live sends the prompt to the real model on AWS Lambda
+            ({remaining ?? BUDGET.anonPerIp} of {BUDGET.anonPerIp} live runs left today; a cold start can add 5–10 s). Replays cost nothing.
+          </p>
+        )}
         {status.live === false && (
           <p className="intro-status" role="status">
             <strong className="silk sig2">{status.note === "circuit breaker" ? "Paused by circuit breaker" : "Live generation paused"}</strong>{" "}
@@ -53,11 +73,11 @@ export function Intro({ status, playing, onWatch }: Props) {
           <tbody>
             <tr>
               <th scope="row">Clean answers<small>just the code: typed, documented, no chatter</small></th>
-              <td>{EVAL.base.formatClean}%</td><td className="au big">{EVAL.formatClean}%</td>
+              <td>{EVAL.base.formatClean}%</td><td className="au big">{EVAL.model.formatClean}%</td>
             </tr>
             <tr className="flat">
               <th scope="row">Correct answers<small className="said">about the same: within ±{EVAL.noisePt} pt noise (HumanEval pass@1)</small></th>
-              <td>{EVAL.base.humaneval}%</td><td>{EVAL.humaneval.toFixed(1)}%</td>
+              <td>{EVAL.base.humaneval}%</td><td>{EVAL.model.humaneval.toFixed(1)}%</td>
             </tr>
             <tr>
               <th scope="row">Answer length<small>mean tokens per answer</small></th>
@@ -66,7 +86,8 @@ export function Intro({ status, playing, onWatch }: Props) {
           </tbody>
         </table>
         <p className="dim intro-fine">
-          Same {EVAL.tasks} HumanEval problems and prompt for both; fine-tuned on one 8 GB GPU, shipped 4-bit.{" "}
+          Same {EVAL.tasks} HumanEval problems and prompt for both; fine-tuned on one 8 GB GPU, shipped 4-bit. As served,
+          with an automatic fix for missing typing imports: {EVAL.formatClean}% clean, {EVAL.humaneval}% correct.{" "}
           <Link href="/notes/#eval">Full evaluation →</Link>
         </p>
       </div>

@@ -298,3 +298,5 @@ kbd { font-family: inherit; border: 1px solid var(--line); padding: 0 4px; font-
 .runrow.blocked { gap: 8px 14px; }
 .runrow.blocked > span { font-size: 12px; }
 .empty .waking { margin: 0; max-width: 60ch; color: var(--au); }
+.btn-live { min-height: 40px; font-size: 13px; font-weight: 700; padding: 0 16px; }
+.intro-blocked { font-size: 12px; max-width: 32ch; }

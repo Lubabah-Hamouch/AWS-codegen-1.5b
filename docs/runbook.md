@@ -14,6 +14,9 @@ curl.exe -m 150 https://sug6pvql5qkkk3tm7udviuyoc40jwvys.lambda-url.eu-north-1.o
 infra\scripts\killswitch.ps1 on                     # 4. afterwards: both layers back on, status.json -> paused
 ```
 
+- With the backend on, the site still opens in replay mode (and plays a recording on a first visit). A live request
+  happens only when a visitor presses **Try it live**, which appears in the intro only while status.json says live
+  and becomes the reset time once that visitor's runs for the day are used.
 - **Step 2 is not optional.** If the function is cold, the first visitor waits 4-9 s for the first token. `{"ready": true}`
   means warm. It works while the kill switch is ON, so it can come first.
 - **Reload pages that were already open.** The site reads status.json once on load; an open tab stays in replay mode.
@@ -141,6 +144,10 @@ against the deployed site, from a clean browser. `cd frontend; npx playwright te
 - First visit: the intro plays the selected recording once, unasked, when the page settles in replay mode (never a live
   run, never with reduced motion; marked by `cg.visited` in localStorage). The e2e specs import `tests/e2e/fixtures.ts`,
   which marks every test as a returning visitor; `intro.spec.ts` tests the first visit itself.
+- Served code: when a finished answer uses a typing name in a type hint without importing it, `src/lib/typingFix.ts`
+  adds the import before the code is shown, copied, saved or run, and the listing marks the line (`+`). It is the
+  only edit to model output, applied the same way to live runs and replays; recordings stay unedited. Its Python twin
+  (`training/data_pipeline/typing_fix.py`) scores the evals "as served"; both pass `typing_fix_cases.json`.
 - The before/after comparison (`src/data/compare.ts`) is one real pair from the HumanEval records, copied verbatim.
 - Plain-language block subtitles and the "How to read the schematic" key both come from `src/data/key.ts`.
 - Link previews: Open Graph / Twitter tags in `_document.tsx`, image `public/og.png` (1200x630, a screenshot of the

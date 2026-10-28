@@ -9,8 +9,9 @@ test("live run from the deployed origin: streams, or shows a coded refusal", asy
   const errors: string[] = [];
   page.on("console", (m) => { if (m.type() === "error" && !/status of 429/.test(m.text())) errors.push(m.text()); });
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "Live", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Run ▸" }).click();
+  // replay is the default; the live request is the visitor's opt-in
+  await expect(page.getByRole("button", { name: "Replay", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Try it live ▸" }).click();
   const code = page.getByLabel("Generated code");
   const refusal = page.locator(".banner[role=alert]");
   await expect(code.or(refusal)).toBeVisible({ timeout: 30_000 });

@@ -1,3 +1,4 @@
+import AxeBuilder from "@axe-core/playwright";
 import { readFileSync } from "node:fs";
 import { expect, test, type Page, type Route } from "./fixtures";
 
@@ -20,7 +21,9 @@ async function live(page: Page, generate: (r: Route) => unknown) {
   await page.route("**/status.json", (r) => r.fulfill({ contentType: "application/json", body: '{"live": true, "since": "x", "note": "live"}' }));
   await page.route("**/generate", (r) => (r.request().method() === "OPTIONS" ? r.fulfill({ status: 204, headers: cors(r) }) : generate(r)));
   await page.goto("/");
-  await expect(page.getByRole("button", { name: "Live", exact: true })).toHaveAttribute("aria-pressed", "true");
+  // replay stays the default even with the backend on; live is the visitor's choice
+  await expect(page.getByRole("button", { name: "Replay", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Live", exact: true }).click();
 }
 const run = (page: Page) => page.locator("#controls").getByRole("button", { name: "Run ▸", exact: true });
 
@@ -67,9 +70,61 @@ test("quota used up: Run is replaced in place by the reset time and a replay but
   await expect(blocked).toBeInViewport();
   await expect(run(page)).toHaveCount(0);
   await expect(page.locator(".banner[role=alert]")).toHaveCount(0);
-  // still blocked after a reload (the count is remembered for the UTC day)
+  // the intro's "Try it live" becomes the same reset time, next to its replay button
+  await expect(page.locator(".intro")).toContainText(/No live runs left today · resets in/);
+  await expect(page.getByRole("button", { name: "Try it live ▸" })).toHaveCount(0);
+  // still blocked after a reload (the count is remembered for the UTC day); the page reopens in replay mode, so the
+  // reset time stands where "Try it live" was, next to the intro's replay button
   await page.reload();
-  await expect(page.locator("#controls .blocked")).toBeVisible();
-  await page.locator("#controls .blocked").getByRole("button", { name: "Watch a recorded run ▸" }).click();
+  await expect(page.locator(".intro")).toContainText(/No live runs left today · resets in/);
+  await expect(page.getByRole("button", { name: "Try it live ▸" })).toHaveCount(0);
+  await page.locator(".intro").getByRole("button", { name: "Watch a recorded run ▸" }).click();
   await expect(page.getByLabel("Generated code")).toContainText("def fibonacci", { timeout: 15_000 });
+});
+
+test("Try it live: replay stays the default, the button sends one real request", async ({ page }) => {
+  let calls = 0;
+  await page.route("**/status.json", (r) => r.fulfill({ contentType: "application/json", body: '{"live": true, "since": "x", "note": "live"}' }));
+  await page.route("**/generate", (r) => (r.request().method() === "OPTIONS" ? r.fulfill({ status: 204, headers: cors(r) }) : (calls++, stream(r))));
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: "Replay", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByText("Live generation is on")).toBeVisible();
+  for (const theme of ["soldermask", "datasheet"]) {  // the live-only intro controls, audited in a dark and the light theme
+    await page.evaluate((t) => document.documentElement.setAttribute("data-theme", t), theme);
+    const r = await new AxeBuilder({ page }).include(".intro").withTags(["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"]).analyze();
+    expect(r.violations.map((v) => `${theme} ${v.id}: ${v.nodes[0]?.target}`)).toEqual([]);
+  }
+  await page.waitForTimeout(500);
+  expect(calls).toBe(0); // nothing live happens by itself
+  await page.getByRole("button", { name: "Try it live ▸" }).click();
+  await expect(page.getByLabel("Generated code")).toContainText("def fibonacci", { timeout: 15_000 });
+  await expect(page.getByText("clean EOS")).toBeVisible({ timeout: 15_000 });
+  expect(calls).toBe(1);
+  await expect(page.getByRole("button", { name: "Live", exact: true })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("paused backend: no Try it live button at all", async ({ page }) => {
+  await page.route("**/status.json", (r) => r.fulfill({ contentType: "application/json", body: '{"live": false, "since": "x", "note": "paused"}' }));
+  await page.goto("/");
+  await expect(page.getByText("Live generation paused")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Try it live ▸" })).toHaveCount(0);
+});
+
+test("a typing name used but not imported: the import is added, marked, and used by the test bench", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  const answer = "```python\nfrom typing import List\n\n\ndef transpose(matrix: Tuple[Tuple[int, ...], ...]) -> List[Tuple[int, ...]]:\n"
+    + "    \"\"\"Transpose a matrix.\"\"\"\n    return list(zip(*matrix))\n```";
+  const sse = answer.split(/(?<=\n)/).map((t) => `event: token\ndata: ${JSON.stringify({ t })}\n\n`).join("")
+    + `event: done\ndata: ${JSON.stringify({ finish_reason: "stop", tokens: 40, prompt_tokens: 20, tok_s: 15, ttft_s: 0.4, prompt_version: "generate.v1", remaining: 4 })}\n\n`;
+  await live(page, (r) => r.fulfill({ status: 200, headers: { ...cors(r), "content-type": "text/event-stream" }, body: sse }));
+  await page.locator("#spec").fill("Write a function that transposes a matrix given as a tuple of tuples.");
+  await run(page).click();
+  const code = page.getByLabel("Generated code");
+  await expect(code).toContainText("from typing import List, Tuple", { timeout: 15_000 });
+  await expect(page.locator(".listing-foot")).toContainText("+ L1 import added after generation: Tuple used in a type hint but not imported");
+  await expect(page.locator(".code .gutter")).toContainText("+1");
+  // the test bench runs the served code: it defines transpose instead of failing with NameError
+  await page.getByRole("button", { name: "Run code ▸" }).click();
+  await expect(page.locator(".bench-sum")).not.toContainText("NameError", { timeout: 90_000 });
+  await expect(page.locator(".bench-sum")).toContainText(/transpose/, { timeout: 90_000 });
 });

@@ -125,3 +125,14 @@ test("link preview: description, Open Graph card and its image", async ({ page, 
   expect(r.status()).toBe(200);
   expect(r.headers()["content-type"]).toBe("image/png");
 });
+
+test("first visit with the backend on: a recording plays, nothing is sent live", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  let live = 0;
+  await page.route("**/status.json", (r) => r.fulfill({ contentType: "application/json", body: '{"live": true, "since": "x", "note": "live"}' }));
+  await page.route("**/generate", (r) => { live++; return r.abort(); });
+  await page.goto("/");
+  await expect(page.getByLabel("Generated code")).toContainText("def fibonacci", { timeout: 15_000 });
+  await expect(page.getByText("Recorded", { exact: false }).first()).toBeVisible();
+  expect(live).toBe(0);
+});
