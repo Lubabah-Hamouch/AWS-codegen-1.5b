@@ -1,5 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 
 // Runs real Python (Pyodide) in the browser under the site's real CSP. Replay mode (backend parked).
 

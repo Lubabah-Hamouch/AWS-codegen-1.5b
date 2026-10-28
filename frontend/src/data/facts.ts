@@ -50,6 +50,11 @@ export const EVAL = {
   humanevalPlus: 61.0,
   formatClean: 99.4,
   eos: 100,
+  meanTokens: 167,
+  noisePt: 7,
+  // the base model, same prompt and scoring (base bf16 column below)
+  base: { humaneval: 65.2, formatClean: 5.5, meanTokens: 300, proseAfter: 154 },
+  tasks: 164,
   // rows: [label, base bf16, merged bf16, Q4_K_M GGUF (shipped)]
   exported: [
     ["HumanEval pass@1", "65.2% (107/164)", "70.1% (115/164)", "64.0% (105/164)"],

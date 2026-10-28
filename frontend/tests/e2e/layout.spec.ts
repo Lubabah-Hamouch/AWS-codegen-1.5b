@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./fixtures";
 // every preset, several widths: the theme button stays on the nav row, one line, same width
 test("theme button: one line, on the nav row, nothing clipped, for every preset and width", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop");

@@ -2,6 +2,7 @@ import Head from "next/head";
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { BudgetPanel, EvalPanel, RunLog } from "@/components/AsidePanels";
 import { Listing } from "@/components/Listing";
+import { Intro } from "@/components/Intro";
 import { Footer, Masthead } from "@/components/Masthead";
 import { Readouts } from "@/components/Readouts";
 import { TestBench } from "@/components/TestBench";
@@ -9,7 +10,7 @@ import { Mode, SignalPath } from "@/components/SignalPath";
 import { EXAMPLES } from "@/data/facts";
 import { ApiError, generate } from "@/lib/api";
 import { UiError, fmtDuration, toUiError } from "@/lib/errors";
-import { RunRecord, loadHistory, loadRemaining, pushHistory, saveRemaining } from "@/lib/history";
+import { RunRecord, claimFirstVisit, loadHistory, loadRemaining, pushHistory, saveRemaining } from "@/lib/history";
 import { Replay, ReplayIndexEntry, loadIndex, loadReplay, play } from "@/lib/replay";
 import { active, firstTokenMs, initialRun, runReducer } from "@/lib/runMachine";
 import { SiteStatus, UNKNOWN, fetchStatus } from "@/lib/status";
@@ -135,6 +136,27 @@ export default function Playground() {
     };
   }, [replayId, record]);
 
+  // First visit only: play the selected recording once, unasked, when the page settles in replay mode. Never a live
+  // run (that spends quota), never with reduced motion, never if the visitor has already started something.
+  const autoplayed = useRef(false);
+  useEffect(() => {
+    if (autoplayed.current || mode !== "replay" || status.live !== false || !replayId || run.phase !== "idle") return;
+    autoplayed.current = true;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches || !claimFirstVisit()) return;
+    runReplay();
+  }, [mode, status.live, replayId, run.phase, runReplay]);
+
+  const outRef = useRef<HTMLDivElement>(null);
+  const watch = () => {
+    setMode("replay");
+    runReplay();
+    const r = outRef.current?.getBoundingClientRect();
+    if (r && r.top > window.innerHeight) {
+      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      outRef.current!.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+    }
+  };
+
   const onRun = () => (mode === "live" ? runLive() : runReplay());
   const retryIn = retryAt !== null ? Math.max(0, Math.ceil((retryAt - now) / 1000)) : null;
   const err: UiError | null = run.phase === "error" ? run.error : null;
@@ -147,16 +169,7 @@ export default function Playground() {
       <main className="page">
         <Masthead page="schematic" />
 
-        {status.live === false && (
-          <div className="banner info" role="status">
-            <strong className="silk sig2">{status.note === "circuit breaker" ? "Paused by circuit breaker" : "Live generation paused"}</strong>
-            <span>
-              {status.note === "circuit breaker" ? "A traffic spike tripped the breaker. " : status.note === "unreachable" ? "The backend did not answer. " : "The backend is parked to keep it at $0. "}
-              Replays are real outputs recorded from the deployed model, played back with their original token timing.
-            </span>
-            {status.since && <span className="dim">since {status.since.replace("T", " ").replace("Z", " UTC")}</span>}
-          </div>
-        )}
+        <Intro status={status} playing={active(run)} onWatch={watch} />
 
         {err && (
           <div className="banner" role="alert">
@@ -183,6 +196,7 @@ export default function Playground() {
           </div>
         )}
 
+        <div ref={outRef} className="anchor" aria-hidden="true" />
         <Readouts run={run} />
 
         <SignalPath

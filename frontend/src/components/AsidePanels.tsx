@@ -9,7 +9,7 @@ export function EvalPanel() {
       <div className="kv"><span>HumanEval pass@1</span><span className="au">{EVAL.humaneval.toFixed(1)}%</span></div>
       <div className="kv"><span>HumanEval+ pass@1</span><span>{EVAL.humanevalPlus.toFixed(1)}%</span></div>
       <div className="kv"><span>format clean</span><span>{EVAL.formatClean}%</span></div>
-      <div className="kv"><span>base, same format</span><span>5.5%</span></div>
+      <div className="kv"><span>base, same format</span><span>{EVAL.base.formatClean}%</span></div>
       <span className="dim" style={{ fontSize: 11 }}>164 tasks · greedy · level with the base on correctness (±7 pt noise)</span>
     </section>
   );

@@ -13,6 +13,7 @@ export type RunRecord = {
 
 const HISTORY = "cg.history";
 const QUOTA = "cg.quota";
+const VISITED = "cg.visited";
 const MAX = 12;
 
 function read<T>(key: string, fallback: T): T {
@@ -50,4 +51,16 @@ export function loadRemaining(now = Date.now()): number | null {
 
 export function saveRemaining(remaining: number, now = Date.now()) {
   write(QUOTA, { day: utcDay(now), remaining });
+}
+
+/** Marks this browser as visited; true only the first time, and only if the mark could be stored (so a browser
+ *  without storage is never treated as new on every load). */
+export function claimFirstVisit(): boolean {
+  try {
+    if (localStorage.getItem(VISITED)) return false;
+    localStorage.setItem(VISITED, "1");
+    return localStorage.getItem(VISITED) === "1";
+  } catch {
+    return false;
+  }
 }

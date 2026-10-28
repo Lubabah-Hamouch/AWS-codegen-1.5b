@@ -88,6 +88,58 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .theme-menu .foot { padding: 8px 12px; font-size: 11px; color: var(--dim); border-top: 1px solid var(--line); line-height: 1.6; }
 kbd { font-family: inherit; border: 1px solid var(--line); padding: 0 4px; font-size: 11px; color: var(--ink); }
 
+/* ---------- intro (plain-language on-ramp) ---------- */
+.intro { border: 1.5px solid var(--frame); display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
+.intro-main { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+.intro-lead { margin: 0; font-family: var(--font-silk), "Arial Narrow", sans-serif; font-size: clamp(20px, 2.1vw, 27px); font-weight: 600; line-height: 1.22; max-width: 40ch; }
+.intro-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.intro-steps li { display: flex; align-items: baseline; gap: 8px; }
+.intro-steps .n { color: var(--cu); font-weight: 700; }
+.intro .runrow a { font-size: 13px; }
+.intro-status { margin: 0; font-size: 12px; color: var(--dim); border-left: 4px solid var(--sig2); padding: 2px 0 2px 10px; max-width: 88ch; }
+.intro-status strong { font-weight: 600; margin-right: 4px; }
+.intro-result { border-left: 1px solid var(--line); padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; }
+.intro-result h3 { margin: 0; font-size: 13px; font-weight: 700; }
+.result { border-collapse: collapse; width: 100%; font-size: 13px; }
+.result th, .result td { padding: 6px 0; border-top: 1px solid var(--line); vertical-align: baseline; }
+.result thead th { border-top: 0; padding: 0 0 2px; font-weight: 400; font-size: 11px; text-align: right; }
+.result tbody th { text-align: left; font-weight: 500; padding-right: 12px; }
+.result tbody th small { display: block; font-size: 12px; font-weight: 400; color: var(--dim); }
+.result tbody th small.said { color: var(--ink); }
+.result tr.flat td { font-size: 15px; }
+.result td { text-align: right; white-space: nowrap; padding-left: 14px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.result td.big { font-size: 22px; font-weight: 600; color: var(--ink); letter-spacing: -0.02em; }
+.result td.big.au { color: var(--au); }
+.intro-fine { margin: 0; font-size: 11px; }
+.compare { grid-column: 1 / -1; border-top: 1px solid var(--line); }
+.compare > summary { cursor: pointer; padding: 0 18px; min-height: 44px; display: flex; align-items: center; gap: 8px; font-size: 12px; list-style: none; }
+.compare > summary::-webkit-details-marker { display: none; }
+.compare > summary::before { content: "▸"; color: var(--cu); }
+.compare[open] > summary::before { content: "▾"; }
+.compare > summary:hover { color: var(--au); background: var(--act); }
+.compare > p { margin: 0 18px 10px; font-size: 12px; max-width: 100ch; }
+.compare-prompt { margin: 0 18px 10px; font-size: 12px; }
+.compare-prompt summary { cursor: pointer; color: var(--dim); min-height: 28px; display: inline-flex; align-items: center; }
+.compare-prompt summary:hover { color: var(--au); }
+.compare pre { margin: 6px 0 0; padding: 10px 12px; background: var(--bg2); border: 1px solid var(--line); font: inherit; font-size: 12px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.compare-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 18px 16px; align-items: start; }
+.answer { margin: 0; min-width: 0; }
+.answer figcaption { font-size: 12px; display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: baseline; }
+.answer-tags { flex-basis: 100%; display: flex; flex-direction: column; gap: 1px; }
+.answer pre { max-height: 440px; overflow-y: auto; }
+@media (max-width: 1000px) {
+  .intro { grid-template-columns: minmax(0, 1fr); }
+  .intro-result { border-left: 0; border-top: 1px solid var(--line); }
+  .compare-cols { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .intro-main, .intro-result { padding: 12px 14px; }
+  .compare > summary { padding: 0 14px; }
+  .compare > p, .compare-prompt { margin-left: 14px; margin-right: 14px; }
+  .compare-cols { padding: 0 14px 14px; }
+}
+.anchor { scroll-margin-top: 8px; height: 0; margin-top: -12px; }
+
 /* ---------- banner ---------- */
 .banner { border: 1.5px solid var(--tp); border-left-width: 6px; padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; }
 .banner.info { border-color: var(--sig2); }

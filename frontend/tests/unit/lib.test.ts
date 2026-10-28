@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiError, generate } from "@/lib/api";
 import { fmtDuration, secondsToUtcMidnight, toUiError } from "@/lib/errors";
+import { claimFirstVisit } from "@/lib/history";
 import { extractCode, suggestFilename, tokenize, unusedImports } from "@/lib/python";
 import { play, type Replay } from "@/lib/replay";
 import { initialRun, liveRate, rateSeries, runReducer } from "@/lib/runMachine";
@@ -150,5 +151,27 @@ describe("status and themes", () => {
   it("has four presets, soldermask first, cycling", () => {
     expect(THEMES.map((t) => t.id)).toEqual(["soldermask", "instrument", "tty", "datasheet"]);
     expect(nextTheme("datasheet")).toBe("soldermask");
+  });
+});
+
+describe("first visit (autoplay gate)", () => {
+  const store = (persist: boolean) => {
+    const m = new Map<string, string>();
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { if (persist) m.set(k, v); } };
+  };
+
+  it("is true once, then false", () => {
+    vi.stubGlobal("localStorage", store(true));
+    expect(claimFirstVisit()).toBe(true);
+    expect(claimFirstVisit()).toBe(false);
+    vi.unstubAllGlobals();
+  });
+
+  it("is false when storage throws or does not keep the mark (never autoplays on every load)", () => {
+    vi.stubGlobal("localStorage", { getItem: () => { throw new Error("blocked"); }, setItem: () => {} });
+    expect(claimFirstVisit()).toBe(false);
+    vi.stubGlobal("localStorage", store(false));
+    expect(claimFirstVisit()).toBe(false);
+    vi.unstubAllGlobals();
   });
 });

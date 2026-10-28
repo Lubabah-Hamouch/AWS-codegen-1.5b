@@ -122,7 +122,7 @@ frontend\scripts\deploy.ps1 -From frontend-out-<sha>.zip -DryRun   # what would 
 frontend\scripts\deploy.ps1 -From frontend-out-<sha>.zip           # s3 sync -> CloudFront invalidation
 ```
 
-Then run the **smoke** workflow (GitHub Actions tab -> smoke -> Run workflow): smoke, layout, a11y and test bench specs
+Then run the **smoke** workflow (GitHub Actions tab -> smoke -> Run workflow): smoke, layout, a11y, test bench and intro specs
 against the deployed site, from a clean browser. `cd frontend; npx playwright test` runs the same locally.
 
 - The zip is the `frontend-out-<sha>` artifact of a green `ci` run (run page -> Artifacts). It is the build that passed
@@ -138,7 +138,11 @@ against the deployed site, from a clean browser. `cd frontend; npx playwright te
 - `_next/` assets are cached for a year (hashed names); HTML and replays for 60 s, and each deploy invalidates `/*`.
 - The API URL is in `frontend/.env.production` / `.env.development` (public by design). The demo API key is never used by
   the frontend.
-- Checks: `npm test` (25 unit), `node scripts/contrast.mjs` (WCAG contrast of all four themes),
+- First visit: the intro plays the selected recording once, unasked, when the page settles in replay mode (never a live
+  run, never with reduced motion; marked by `cg.visited` in localStorage). The e2e specs import `tests/e2e/fixtures.ts`,
+  which marks every test as a returning visitor; `intro.spec.ts` tests the first visit itself.
+- The before/after comparison (`src/data/compare.ts`) is one real pair from the HumanEval records, copied verbatim.
+- Checks: `npm test` (27 unit), `node scripts/contrast.mjs` (WCAG contrast of all four themes),
   `LIVE=1 npx playwright test tests/e2e/live.spec.ts` (one real cross-origin run; kill switch must be OFF).
 - Local dev: `cd frontend; npm run dev` -> http://localhost:3000 (no status.json locally, so it starts in live mode).
 - Local check of the real build under the real CSP: `npm run build`, then `python scripts/serve_static.py` (serves `out/`

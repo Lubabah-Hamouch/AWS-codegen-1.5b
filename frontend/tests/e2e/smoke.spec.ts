@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./fixtures";
 
 // Assumes the backend is parked (status.json live=false): exercises replay mode, which costs no invocation.
 
