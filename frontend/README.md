@@ -12,7 +12,7 @@ The playground site: a static Next.js export (pages router, built with webpack) 
 | `src/data/checks.ts` | Hand-written check suites for the five example prompts |
 | `public/replays/` | Five recorded real runs, played back while the backend is paused |
 | `public/testbench.worker.mjs` | Web Worker that runs generated code in Pyodide (CPython on WebAssembly) |
-| `scripts/` | `deploy.ps1`, `copy-pyodide.mjs` (runs before dev/build), `record_replays.py`, `contrast.mjs`, `serve_static.py` |
+| `scripts/` | `deploy.ps1`, `copy-pyodide.mjs` (runs before dev/build), `check-csp.mjs` (no inline scripts in the export), `record_replays.py`, `contrast.mjs`, `serve_static.py` |
 
 ## Run
 

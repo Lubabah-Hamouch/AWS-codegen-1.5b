@@ -118,14 +118,23 @@ Function URL: `https://sug6pvql5qkkk3tm7udviuyoc40jwvys.lambda-url.eu-north-1.on
 ## Deploy the frontend
 
 ```powershell
-frontend\scripts\deploy.ps1          # next build (webpack) -> s3 sync -> CloudFront invalidation
-cd frontend; npx playwright test      # browser checks against the deployed site (replay, themes, a11y, test bench)
+frontend\scripts\deploy.ps1 -From frontend-out-<sha>.zip -DryRun   # what would change (lists only)
+frontend\scripts\deploy.ps1 -From frontend-out-<sha>.zip           # s3 sync -> CloudFront invalidation
 ```
+
+Then run the **smoke** workflow (GitHub Actions tab -> smoke -> Run workflow): smoke, layout, a11y and test bench specs
+against the deployed site, from a clean browser. `cd frontend; npx playwright test` runs the same locally.
+
+- The zip is the `frontend-out-<sha>` artifact of a green `ci` run (run page -> Artifacts). It is the build that passed
+  the tests; `build-info.txt` inside names the commit, and `deploy.ps1` prints it and never uploads it.
+- `deploy.ps1` with no `-From` builds locally first (the old flow); both paths run the CSP check before uploading.
+- Deploys are manual on purpose. CI has no AWS access: this account's organization SCP denies the IAM OIDC provider
+  APIs, so GitHub Actions cannot get short-lived credentials, and stored access keys are not an option.
 
 - Stack `codegen-frontend` (`infra/frontend.yaml`): private S3 bucket, CloudFront with origin access control, a viewer-request
   function mapping `/notes/` to `/notes/index.html`, security headers. CSP: `script-src 'self'`, `connect-src` = the Function URL.
-- **Webpack, not Turbopack.** Turbopack's static export injects an inline `<script>`, which that CSP blocks. `deploy.ps1`
-  refuses to publish if any inline script appears in the export.
+- **Webpack, not Turbopack.** Turbopack's static export injects an inline `<script>`, which that CSP blocks.
+  `scripts/check-csp.mjs` fails CI and `deploy.ps1` refuses to publish if any inline script appears in the export.
 - `_next/` assets are cached for a year (hashed names); HTML and replays for 60 s, and each deploy invalidates `/*`.
 - The API URL is in `frontend/.env.production` / `.env.development` (public by design). The demo API key is never used by
   the frontend.
@@ -178,6 +187,17 @@ periods (AWS does not document whether that happens). Cost: about one cold start
 It bypasses both kill-switch layers (direct invoke, not the URL), which is intended; it does no model generation.
 
 ## Tests
+
+CI (`.github/workflows/ci.yml`) runs on every push and pull request, with no AWS access:
+
+- `frontend`: `npm ci`, typecheck, unit tests, contrast check, build, CSP check; uploads the export as `frontend-out-<sha>`
+  (kept 30 days).
+- `backend-guard`: the guard tests against a pinned DynamoDB Local service. `REQUIRE_DDB=1` turns "unreachable" into a
+  failure instead of a skip.
+- `training-cpu`: `training/tests` without `test_sft_labels.py` (needs torch and the real tokenizer; run it in the training
+  environment).
+
+Not in CI: GPU training, real-model evals, the Lambda image and stacks, and the live suites below.
 
 - `python -m pytest backend/tests` with DynamoDB Local on :8000: guard logic (11 tests).
 - `python backend/tests/e2e_local.py <image>`: the real app, real model, DynamoDB Local (17 checks).

@@ -3,7 +3,7 @@
     docker run -d --name ddb-local -p 8000:8000 amazon/dynamodb-local
     DDB_ENDPOINT=http://localhost:8000 python -m pytest backend/tests -q
 
-Skipped when DynamoDB Local is not reachable.
+Skipped when DynamoDB Local is not reachable, unless REQUIRE_DDB is set (CI), which makes that a failure.
 """
 
 import os
@@ -43,6 +43,8 @@ def table():
         c.create_table(TableName=guard.TABLE, KeySchema=[{"AttributeName": "pk", "KeyType": "HASH"}],
                        AttributeDefinitions=[{"AttributeName": "pk", "AttributeType": "S"}], BillingMode="PAY_PER_REQUEST")
     except Exception as e:
+        if os.environ.get("REQUIRE_DDB"):  # CI: a skip would read as a pass
+            pytest.fail(f"DynamoDB Local not reachable: {e}")
         pytest.skip(f"DynamoDB Local not reachable: {e}")
     yield
 

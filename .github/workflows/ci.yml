@@ -1,0 +1,76 @@
+# Tests on every push and pull request; the frontend job also uploads the static export as an artifact.
+# Nothing here deploys or touches AWS: publishing stays manual (frontend/scripts/deploy.ps1 -From <artifact zip>),
+# like the backend. GPU training and real-model evals are out of scope (local hardware).
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 22.12.0
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: node scripts/contrast.mjs
+      - run: npm run build
+      - run: node scripts/check-csp.mjs out
+      # Which commit the artifact came from; deploy.ps1 prints it and never uploads it.
+      - run: echo "$GITHUB_SHA $GITHUB_REF_NAME run $GITHUB_RUN_ID" > out/build-info.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
+        with:
+          name: frontend-out-${{ github.sha }}
+          path: frontend/out
+          if-no-files-found: error
+          retention-days: 30
+
+  backend-guard:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      dynamodb:
+        image: amazon/dynamodb-local@sha256:6ada631ec7aa5fc83446855eb17233e3dad184fec47477e8140c6c569cfe0c86
+        ports: ["8000:8000"]
+    env:
+      DDB_ENDPOINT: http://localhost:8000
+      REQUIRE_DDB: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install boto3==1.43.120 pytest==9.0.2
+      - name: wait for DynamoDB Local
+        run: timeout 60 bash -c 'until curl -s -o /dev/null http://localhost:8000; do sleep 1; done'
+      - run: python -m pytest backend/tests -q
+
+  training-cpu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: "3.12"
+      - run: pip install pytest==9.0.2
+      # test_sft_labels needs torch and downloads the real tokenizer: run it in the training environment instead.
+      - run: python -m pytest training/tests -q --ignore=training/tests/test_sft_labels.py

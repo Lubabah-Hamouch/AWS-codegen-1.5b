@@ -17,7 +17,7 @@ llama.cpp's `llama-server` as server-sent events. It runs in a container image b
 
 ```bash
 docker run -d --name ddb-local -p 8000:8000 amazon/dynamodb-local
-DDB_ENDPOINT=http://localhost:8000 python -m pytest backend/tests -q    # guard tests (skipped if DynamoDB Local is down)
+DDB_ENDPOINT=http://localhost:8000 python -m pytest backend/tests -q    # guard tests (skipped if DynamoDB Local is down; REQUIRE_DDB=1 fails instead, as in CI)
 python backend/tests/e2e_local.py IMAGE                                 # needs an x86 build of the Dockerfile
 ```
 

@@ -93,6 +93,8 @@ if invocations go above 600 in 5 minutes.
 ## Running it
 
 - **Operating the deployment** (going live, pausing, deploying, recording replays): [docs/runbook.md](docs/runbook.md)
+- **CI:** every push and pull request runs the frontend, backend guard and CPU-only training tests and builds the site;
+  deploys stay manual ([runbook](docs/runbook.md#tests)).
 - **Training and evaluation:** [training/README.md](training/README.md), [training/SETUP.md](training/SETUP.md)
 - **Frontend locally:** `cd frontend && npm ci && npm run dev`. This runs against the real backend, which allows
   `localhost:3000`, or falls back to replay mode while the backend is paused.
