@@ -1,6 +1,7 @@
 """Lambda app: llama-server (Q4_K_M GGUF) behind the guardrails, streaming SSE. Runs behind the Lambda Web Adapter.
 
 GET  /health     200 only once the model is loaded (the Web Adapter polls this during init); unguarded
+POST /events     non-HTTP invocations (the daily EventBridge warm-up); returns 200
 POST /generate   {"prompt": str, "max_tokens": int?}   header x-api-key optional (no key = anonymous tier)
                  -> text/event-stream:  event: token  data: {"t": "<text>"}
                                         event: done   data: {"finish_reason", "tokens", "prompt_tokens", "tok_s", "ttft_s", "prompt_version"}
@@ -77,8 +78,13 @@ class H(BaseHTTPRequestHandler):
         self.wfile.flush()
 
     def client_ip(self) -> str:
-        # Lambda's front end appends the real client address; take the last entry, not one the client could forge.
-        return self.headers.get("x-forwarded-for", "").split(",")[-1].strip() or self.client_address[0]
+        # Not x-forwarded-for: the Function URL passes a client-supplied one through unchanged (measured), so anyone
+        # could pick their own per-IP bucket. The Web Adapter forwards Lambda's own requestContext in this header,
+        # replacing any client header of the same name; its sourceIp is the address AWS saw.
+        try:
+            return json.loads(self.headers.get("x-amzn-request-context", ""))["http"]["sourceIp"]
+        except (ValueError, KeyError, TypeError):
+            return "unknown"  # every request without a context shares one bucket: strict, never a bypass
 
     def do_GET(self):
         if self.path.split("?")[0] == "/health":
@@ -86,6 +92,11 @@ class H(BaseHTTPRequestHandler):
         self._json(404, {"error": "not found"})
 
     def do_POST(self):
+        if self.path.split("?")[0] == "/events":
+            # Non-HTTP invocations (the daily EventBridge warm-up) arrive here via the Web Adapter. Reaching this line
+            # means init ran and the model is loaded; nothing else to do.
+            self.rfile.read(min(int(self.headers.get("content-length", 0)), MAX_BODY))
+            return self._json(200, {"warm": state["ready"]})
         if self.path.split("?")[0] != "/generate":
             return self._json(404, {"error": "not found"})
         try:
@@ -141,6 +152,10 @@ class H(BaseHTTPRequestHandler):
                 if time.monotonic() - t0 > DEADLINE_S:
                     finish = "time_limit"
                     break
+            up.close()
+            # Free the slot before telling the client we are done: a client that sends its next request on `done`
+            # must not find its own finished request still holding the slot. (do_POST releases again; that is a no-op.)
+            guard.release(adm)
             self._event("done", {"finish_reason": finish, "tokens": usage.get("completion_tokens"),
                                  "prompt_tokens": usage.get("prompt_tokens"),
                                  "tok_s": round(timings["predicted_per_second"], 1) if timings.get("predicted_per_second") else None,
@@ -154,6 +169,9 @@ class H(BaseHTTPRequestHandler):
             raise
         except Exception as e:  # upstream failure mid-stream: tell the client, never hang
             log(f"stream error: {type(e).__name__}: {e}")
+            if up is not None:
+                up.close()
+            guard.release(adm)
             try:
                 self._event("error", {"error": "generation failed"})
                 self.wfile.write(b"0\r\n\r\n")

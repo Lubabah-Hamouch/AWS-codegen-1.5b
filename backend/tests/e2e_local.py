@@ -100,6 +100,11 @@ try:
     done = [d for n, d in ev if n == "done"]
     check("max_tokens is capped by the server (300)", s == 200 and done and done[0]["tokens"] <= 300, str(done[0] if done else ev))
 
+    ev_req = urllib.request.Request(f"http://127.0.0.1:{PORT}/events", data=b'{"source": "codegen.daily-warmup"}',
+                                    headers={"content-type": "application/json"})
+    with urllib.request.urlopen(ev_req, timeout=30) as r:
+        body = json.loads(r.read())
+    check("POST /events (scheduled warm-up) -> 200 warm", r.status == 200 and body.get("warm") is True, str(body))
     check("empty prompt -> 400", post({"prompt": "  "})[0] == 400)
     check("non-string prompt -> 400", post({"prompt": 5})[0] == 400)
     check("oversized prompt -> 400", post({"prompt": "x" * 2001})[0] == 400)

@@ -7,6 +7,12 @@ Parameters:
   ImageUri: {Type: String, Description: "arm64 image pushed by infra/scripts/build_push.ps1"}
   MemoryMb: {Type: Number, Default: 3008, Description: "this account is capped at 3008 MB; Lambda gives ~1 vCPU per 1769 MB"}
   LlamaThreads: {Type: String, Default: "2"}
+  BreakerInvocationsPer5Min:
+    Type: Number
+    Default: 600
+    Description: >-
+      Circuit breaker: more invocations than this in 5 minutes trips both kill-switch layers. Legitimate traffic is far
+      below it (global cap 100 generations/day, 2 concurrent ~10 s generations = at most ~60 per 5 min).
 
 Resources:
   LogGroup:
@@ -44,6 +50,77 @@ Resources:
           AllowOrigins: ['*']
           AllowMethods: [GET, POST]
           AllowHeaders: [content-type, x-api-key]
+      Events:
+        # Insurance against the image cache going cold after long idle (not documented by AWS either way): one
+        # invocation a day, ~1 cold start = ~11 GB-s/day. Arrives at the app as POST /events via the Web Adapter.
+        # It invokes the function directly, so it works whatever the kill switches say.
+        DailyWarmup:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 day)
+            Input: '{"source": "codegen.daily-warmup"}'
+
+  # Circuit breaker. Every request that reaches the Function URL is a billed invocation, even ones the app rejects
+  # (401/429/503), so in-app limits cannot cap the cost of a flood. This alarm counts invocations; when it fires, the
+  # breaker sets the app kill switch (immediate) and switches the URL to AWS_IAM (AWS then rejects requests before
+  # invoking anything; ~35-40 s to propagate). Recovery is manual: infra/scripts/killswitch.ps1 off.
+  BreakerTopic:
+    Type: AWS::SNS::Topic
+
+  InvocationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: codegen-backend-invocation-flood
+      AlarmDescription: Trips the circuit breaker (both kill-switch layers) on an invocation flood
+      Namespace: AWS/Lambda
+      MetricName: Invocations
+      Dimensions: [{Name: FunctionName, Value: !Ref Function}]
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: !Ref BreakerInvocationsPer5Min
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions: [!Ref BreakerTopic]
+
+  BreakerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: codegen-breaker
+      Runtime: python3.12
+      Architectures: [arm64]
+      Handler: index.handler
+      MemorySize: 128
+      Timeout: 30
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref TableName
+          TARGET_FUNCTION: !Ref Function
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action: [lambda:UpdateFunctionUrlConfig]
+              Resource: !GetAtt Function.Arn
+            - Effect: Allow
+              Action: [dynamodb:PutItem]
+              Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}
+      Events:
+        Alarm:
+          Type: SNS
+          Properties: {Topic: !Ref BreakerTopic}
+      InlineCode: |
+        import os, time
+        import boto3
+
+        def handler(event, context):
+            msg = event["Records"][0]["Sns"]["Message"] if event.get("Records") else str(event)
+            when = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            # Layer 1 first: it is immediate. Layer 2 stops invocations (and their cost) once it propagates.
+            boto3.client("dynamodb").put_item(TableName=os.environ["TABLE_NAME"], Item={
+                "pk": {"S": "config#killswitch"}, "enabled": {"BOOL": True}, "reason": {"S": f"circuit breaker {when}"}})
+            boto3.client("lambda").update_function_url_config(FunctionName=os.environ["TARGET_FUNCTION"], AuthType="AWS_IAM")
+            print(f"breaker tripped at {when}: {msg[:500]}")
+            return {"tripped": when}
 
 Outputs:
   FunctionUrl: {Value: !GetAtt FunctionUrl.FunctionUrl}

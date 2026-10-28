@@ -38,6 +38,11 @@ Weight repacking roughly doubles memory (a converted copy of the weights next to
 | **Lambda Graviton2, 3008 MB (~1.7 vCPU), 2 threads** | **15.9** |
 | Lambda Graviton2, 1 thread | 8.8-11.0 |
 
+Speed varies by execution environment: in one minute, three environments of the same 3008 MB / 2-thread function
+generated at 19.1, 15.8 and 11.7 tok/s (a different host CPU or neighbour load is the likely cause; Lambda does not
+say which). 15.9 tok/s is the median across the benchmark; plan for a 12-19 tok/s spread per request. The free-tier
+math below uses the median.
+
 ## Cold starts
 
 - **With the image cached, cold starts are 4-9 s to ready**, and every one of 12 forced cold starts stayed inside Lambda's
@@ -48,10 +53,12 @@ Weight repacking roughly doubles memory (a converted copy of the weights next to
   the invocation, and the model needed ~76 s to become ready while the 1 GB image was fetched for the first time. No later
   cold start came near that: 15 cold starts with the same image (3 in the first benchmark, 12 in the clean run) all took
   4-9 s. So the expensive part is the first fetch of a new image, not the cold start itself.
-- **Not yet verified:** whether a function that has been idle for days or weeks loses its image cache and pays the long start
-  again. AWS documents that idle functions can become `Inactive` (the first invocation then fails while Lambda re-creates
-  resources) but does not document cache eviction for idle container images. Re-measure after 24-48 h of idle before relying
-  on this.
+- **It is the model layer that costs the time.** A later deploy that changed only the app layer (model layer unchanged)
+  started in 11 s on its first request.
+- **Idle periods: insured, not verified.** AWS documents that idle functions can become `Inactive` (the first invocation
+  then fails while Lambda re-creates resources) but does not document cache eviction for idle container images. Rather than
+  wait to find out, a daily EventBridge warm-up now invokes the function once a day (~340 GB-s/month); its CloudWatch
+  REPORT lines show the cold-start time each day, so a recurrence of the long start would be visible there.
 - That 91 s first request is right at the 90 s function timeout, so it must not be a user's request: the runbook's deploy
   step now includes a warm-up call to `/health` (unguarded, works while the kill switch is ON).
 
@@ -83,7 +90,7 @@ Not needed at current numbers, recorded for the decision log:
 | Option | Effect | Cost / tradeoff |
 |---|---|---|
 | Post-deploy warm-up call (done) | Removes the one-time ~75 s start from users | None |
-| Scheduled daily `/health` ping (EventBridge Scheduler) | Keeps the function from going idle for weeks, if that turns out to evict the image | ~1 cold start/day = ~340 GB-s/month; small extra moving part |
+| Daily warm-up invocation, EventBridge rule (done) | Keeps the function from going idle for weeks, in case that evicts the image | ~1 cold start/day = ~340 GB-s/month |
 | SnapStart for container images (opt-in label for custom runtimes, launched 2026-07) | Restores a snapshot with the model loaded instead of loading it; AWS claims sub-second | Breaks $0: ~$11.50/month snapshot caching at 3008 MB + ~$0.0004 per restore; untested with a llama-server subprocess and the Web Adapter |
 | Provisioned concurrency, 1 environment | No cold starts at all | Breaks $0: ~$32/month at 3008 MB, and the free tier does not apply to that function |
 

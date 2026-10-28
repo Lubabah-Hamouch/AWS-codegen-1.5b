@@ -126,8 +126,12 @@ check("anonymous per-IP cap enforced (5/day)", codes == [200, 200, 200, 429, 429
 out = {}
 
 
+LONG = "Write a Python class implementing a binary search tree with insert, delete, search and in-order traversal methods."
+
+
 def worker(i):
-    out[i] = gen(max_tokens=150, key=KEY)[:2]
+    # ~300 tokens (~20 s): long enough to overlap even when the other requests pay a cold start (4-9 s) first
+    out[i] = gen(prompt=LONG, max_tokens=300, key=KEY)[:2]
 
 
 ts = [threading.Thread(target=worker, args=(i,)) for i in range(3)]
