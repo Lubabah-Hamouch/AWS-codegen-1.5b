@@ -82,3 +82,51 @@ export async function generate(prompt: string, h: StreamHandlers, signal: AbortS
   }
   throw new ApiError(0, "protocol", "the stream ended without a done event");
 }
+
+/** The function times out at 90 s; past this with no response there is nothing left to wait for. */
+export const WAKE_DEADLINE_MS = 95_000;
+
+function wait(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(new ApiError(0, "aborted", "stopped"));
+    const t = setTimeout(() => { signal.removeEventListener("abort", stop); resolve(); }, ms);
+    const stop = () => { clearTimeout(t); reject(new ApiError(0, "aborted", "stopped")); };
+    signal.addEventListener("abort", stop, { once: true });
+  });
+}
+
+/**
+ * generate() plus what a cold start needs. A 503 "starting" (model still loading) is retried after its retry-after;
+ * it costs no quota, since the backend refuses before admitting. If no response has arrived by `deadlineMs`, the
+ * request is abandoned with code "timeout" so the page can offer a replay instead of waiting forever.
+ */
+export async function generateLive(prompt: string, h: StreamHandlers, signal: AbortSignal,
+  opts: { deadlineMs?: number; fetchImpl?: typeof fetch; onRetry?: () => void } = {}) {
+  const ctl = new AbortController();
+  const stop = () => ctl.abort();
+  signal.addEventListener("abort", stop);
+  let opened = false;
+  let timedOut = false;
+  const timer = setTimeout(() => { if (!opened) { timedOut = true; ctl.abort(); } }, opts.deadlineMs ?? WAKE_DEADLINE_MS);
+  const handlers = { ...h, onOpen: () => { opened = true; h.onOpen?.(); } };
+  try {
+    for (;;) {
+      try {
+        return await generate(prompt, handlers, ctl.signal, opts.fetchImpl);
+      } catch (e) {
+        if (timedOut) throw new ApiError(0, "timeout", "no response before the deadline");
+        if (!(e instanceof ApiError) || e.code !== "starting" || signal.aborted) throw e;
+        opts.onRetry?.();
+        try {
+          await wait((e.retryAfterS ?? 5) * 1000, ctl.signal);
+        } catch (w) {
+          if (timedOut) throw new ApiError(0, "timeout", "no response before the deadline");
+          throw w;
+        }
+      }
+    }
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", stop);
+  }
+}

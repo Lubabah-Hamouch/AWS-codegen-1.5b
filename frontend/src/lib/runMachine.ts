@@ -57,6 +57,10 @@ export function runReducer(s: RunState, a: RunAction): RunState {
 
 export const active = (s: RunState) => s.phase === "connecting" || s.phase === "streaming";
 
+/** A live request with no response yet after this long is most likely waiting for a cold start, not the network. */
+export const WAKING_AFTER_MS = 1500;
+export const waking = (s: RunState) => s.phase === "connecting" && s.source === "live" && s.elapsedMs >= WAKING_AFTER_MS;
+
 /** Client-observed time to first token, ms (includes network and any cold start, unlike the server's ttft_s). */
 export const firstTokenMs = (s: RunState) => (s.tokenTimes.length ? s.tokenTimes[0] : null);
 

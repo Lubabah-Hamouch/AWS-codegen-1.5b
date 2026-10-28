@@ -9,12 +9,14 @@ import { SchematicKey } from "@/components/SchematicKey";
 import { TestBench } from "@/components/TestBench";
 import { Mode, SignalPath } from "@/components/SignalPath";
 import { EXAMPLES } from "@/data/facts";
-import { ApiError, generate } from "@/lib/api";
-import { UiError, fmtDuration, toUiError } from "@/lib/errors";
+import { ApiError, generateLive } from "@/lib/api";
+import { UiError, fmtDuration, secondsToUtcMidnight, toUiError } from "@/lib/errors";
 import { RunRecord, claimFirstVisit, loadHistory, loadRemaining, pushHistory, saveRemaining } from "@/lib/history";
 import { Replay, ReplayIndexEntry, loadIndex, loadReplay, play } from "@/lib/replay";
 import { active, firstTokenMs, initialRun, runReducer } from "@/lib/runMachine";
 import { SiteStatus, UNKNOWN, fetchStatus } from "@/lib/status";
+
+const QUOTA_CODES = new Set(["daily_limit", "daily_capacity"]);
 
 export default function Playground() {
   const [run, dispatch] = useReducer(runReducer, initialRun);
@@ -72,7 +74,7 @@ export default function Playground() {
     dispatch({ type: "start", source: "live", prompt });
     const base = { at: new Date().toISOString(), source: "live" as const, prompt };
     try {
-      await generate(prompt, {
+      await generateLive(prompt, {
         onOpen: () => dispatch({ type: "open" }),
         onToken: (t) => { const at = since(); ttft ??= at; dispatch({ type: "token", t, at }); },
         onDone: (info) => {
@@ -81,7 +83,7 @@ export default function Playground() {
           if (typeof info.remaining === "number") { saveRemaining(info.remaining); setRemaining(info.remaining); }
           record({ ...base, tokens: info.tokens, tok_s: info.tok_s, ttft_ms: ttft, outcome: info.finish_reason ?? "?" });
         },
-      }, ctl.signal);
+      }, ctl.signal, { onRetry: () => setLastCode("starting") });
     } catch (e) {
       const err = e instanceof ApiError ? e : new ApiError(0, "protocol", String(e));
       if (err.code === "aborted") {
@@ -167,6 +169,11 @@ export default function Playground() {
     showOutput();
   };
 
+  // Live runs that cannot succeed today: say so where the Run button is, with a replay next to it.
+  const liveBlocked = remaining === 0 ? `No live runs left today · resets in ${fmtDuration(secondsToUtcMidnight(now))}`
+    : lastCode === "daily_capacity" ? `Today's shared live budget is spent · resets in ${fmtDuration(secondsToUtcMidnight(now))}`
+    : null;
+
   const onRun = () => (mode === "live" ? runLive() : runReplay());
   const retryIn = retryAt !== null ? Math.max(0, Math.ceil((retryAt - now) / 1000)) : null;
   const err: UiError | null = run.phase === "error" ? run.error : null;
@@ -181,7 +188,7 @@ export default function Playground() {
 
         <Intro status={status} playing={active(run)} onWatch={watch} />
 
-        {err && (
+        {err && !QUOTA_CODES.has(err.code) && (
           <div className="banner" role="alert">
             <strong className="silk tp">{err.title}</strong>
             <span>{err.detail}</span>
@@ -216,6 +223,7 @@ export default function Playground() {
           replays={replays} replayId={replayId} onReplay={setReplayId}
           onRun={onRun} onStop={() => stopRef.current()}
           status={status} remaining={remaining} lastCode={lastCode}
+          liveBlocked={liveBlocked} onWatch={watch}
         />
 
         <svg className={`route${active(run) ? " live" : ""}`} viewBox="0 0 1000 28" preserveAspectRatio="none" aria-hidden="true">

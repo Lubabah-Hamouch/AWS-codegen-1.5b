@@ -295,3 +295,6 @@ kbd { font-family: inherit; border: 1px solid var(--line); padding: 0 4px; font-
 @media (max-width: 640px) { .bar { grid-template-columns: 110px minmax(0, 1fr) 54px; } }
 .empty-idle { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 60ch; }
 .empty-idle p { margin: 0; }
+.runrow.blocked { gap: 8px 14px; }
+.runrow.blocked > span { font-size: 12px; }
+.empty .waking { margin: 0; max-width: 60ch; color: var(--au); }

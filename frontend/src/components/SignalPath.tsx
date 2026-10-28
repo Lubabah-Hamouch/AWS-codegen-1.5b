@@ -3,7 +3,7 @@ import { BUDGET, EXAMPLES, HOST, MODEL, PERF } from "@/data/facts";
 import { PLAIN } from "@/data/key";
 import { MAX_PROMPT_CHARS } from "@/lib/api";
 import type { ReplayIndexEntry } from "@/lib/replay";
-import { RunState, active } from "@/lib/runMachine";
+import { RunState, active, waking } from "@/lib/runMachine";
 import type { SiteStatus } from "@/lib/status";
 
 export type Mode = "live" | "replay";
@@ -23,6 +23,9 @@ type Props = {
   status: SiteStatus;
   remaining: number | null;
   lastCode: string | null;
+  /** live cannot succeed today (quota used up): shown instead of Run, with a replay next to it */
+  liveBlocked: string | null;
+  onWatch: () => void;
 };
 
 function Conn({ label, sub, live, double }: { label: string; sub: ReactNode; live: boolean; double?: boolean }) {
@@ -51,6 +54,11 @@ export function SignalPath(p: Props) {
   const { run } = p;
   const running = active(run);
   const streaming = run.phase === "streaming";
+  const wakingUp = waking(run);
+  // before any response: connecting, then (past WAKING_AFTER_MS) a cold start; prefill only once the stream is open
+  const u3 = !running ? "idle" : run.phase === "connecting" ? (wakingUp ? "waking up" : "connecting")
+    : run.tokenTimes.length ? "decode" : "prefill";
+  const waitS = Math.floor(run.elapsedMs / 1000);
   const killLabel = p.status.live === false ? "engaged" : p.status.live === true ? "open" : "unknown";
   const breaker = p.status.note === "circuit breaker" ? "tripped" : "armed";
   const slot = running && run.source === "live" ? "held 1 / 2" : p.lastCode === "busy" ? "full 2 / 2" : `free · cap ${BUDGET.concurrency}`;
@@ -97,6 +105,12 @@ export function SignalPath(p: Props) {
               value={p.replays.find((r) => r.id === p.replayId)?.prompt ?? ""} />
           </>
         )}
+        {p.mode === "live" && p.liveBlocked && !running ? (
+          <div className="runrow blocked" role="status">
+            <span className="tp">{p.liveBlocked}</span>
+            <button type="button" className="btn-run silk" onClick={p.onWatch}>Watch a recorded run ▸</button>
+          </div>
+        ) : (
         <div className="runrow">
           {running ? (
             <button type="button" className="btn-run btn-stop silk" onClick={p.onStop}>Stop ■</button>
@@ -106,10 +120,13 @@ export function SignalPath(p: Props) {
               {p.mode === "live" ? "Run ▸" : "Replay ▸"}
             </button>
           )}
-          <span className="dim" style={{ fontSize: 11 }}>
-            {p.mode === "live" ? <><kbd>Ctrl</kbd>+<kbd>Enter</kbd> · {quota}</> : "plays in your browser · no backend call"}
+          <span className={wakingUp ? "au" : "dim"} style={{ fontSize: wakingUp ? 12 : 11 }} aria-live="polite">
+            {wakingUp ? `waking up the model… ${waitS} s${waitS >= 15 ? " (can take up to ~90 s after an update)" : " (usually 5–10 s)"}`
+              : running && run.source === "live" ? (run.phase === "connecting" ? "connecting…" : "generating…")
+              : p.mode === "live" ? <><kbd>Ctrl</kbd>+<kbd>Enter</kbd> · {quota}</> : "plays in your browser · no backend call"}
           </span>
         </div>
+        )}
       </section>
 
       <Conn label={p.mode === "live" ? "POST" : "file"} sub={<span className="dim">{p.mode === "live" ? "/generate" : "replay"}</span>} live={running} />
@@ -128,7 +145,7 @@ export function SignalPath(p: Props) {
       <Conn label="admit" sub={<span className="tp">TP1</span>} live={running} />
 
       <section className={`blk u3${running ? " active" : ""}`} aria-labelledby="u3">
-        <h2 id="u3" className="silk"><span>U3 · Model</span><span className={running ? "au" : "dim"}>{running ? (streaming ? "decode" : "prefill") : "idle"}</span></h2>
+        <h2 id="u3" className="silk"><span>U3 · Model</span><span className={running ? "au" : "dim"}>{u3}</span></h2>
         <p className="blk-sub">{PLAIN.u3}</p>
         <div className="kv"><span>WEIGHTS</span><span>{MODEL.quant} · {MODEL.sizeMb} MB</span></div>
         <div className="kv"><span>THREADS</span><span>{HOST.threads} · greedy · seed 42</span></div>

@@ -1,5 +1,5 @@
 import { PERF } from "@/data/facts";
-import { RunState, active, firstTokenMs, liveRate, rateSeries } from "@/lib/runMachine";
+import { RunState, active, firstTokenMs, liveRate, rateSeries, waking } from "@/lib/runMachine";
 
 const PHASE_LABEL: Record<RunState["phase"], string> = {
   idle: "IDLE", connecting: "ADMIT", streaming: "DECODE", done: "EOS", error: "FAULT", stopped: "HALT",
@@ -10,7 +10,7 @@ export function Readouts({ run }: { run: RunState }) {
   const rate = run.done?.tok_s ?? liveRate(run);
   const tokens = run.done?.tokens ?? (run.tokenTimes.length || null);
   const waitingLong = run.phase === "connecting" && run.elapsedMs > 2500;
-  const finish = run.phase === "done" ? (run.done?.finish_reason === "stop" ? "EOS" : (run.done?.finish_reason ?? "?").toUpperCase()) : PHASE_LABEL[run.phase];
+  const finish = waking(run) ? "WAKING" : run.phase === "done" ? (run.done?.finish_reason === "stop" ? "EOS" : (run.done?.finish_reason ?? "?").toUpperCase()) : PHASE_LABEL[run.phase];
 
   return (
     <div className="readouts" role="group" aria-label="Test point readouts">

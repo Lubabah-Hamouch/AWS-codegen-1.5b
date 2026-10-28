@@ -40,6 +40,12 @@ export function toUiError(e: ApiError, now = Date.now()): UiError {
     case "disabled":
       return { ...base, title: "Live generation is paused", detail: "The backend's kill switch is on. Showing recorded runs instead.",
                offerReplay: true, paused: true };
+    case "timeout":
+    case "http_502":
+    case "http_504":
+      return { ...base, title: "The model took too long to wake up",
+               detail: "The first request after a quiet spell or an update can need up to ~90 s, and this one ran past it. Recorded runs play instantly; live may work in a minute.",
+               offerReplay: true };
     case "starting":
       return { ...base, title: "The model is still loading", detail: "A cold start takes 4–9 s. Retry in a moment.", retryAfterS: e.retryAfterS ?? 5 };
     case "unavailable":

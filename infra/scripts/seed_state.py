@@ -2,6 +2,7 @@
 
     python seed_state.py --init                  create config#global, config#killswitch (ON), and the demo key
     python seed_state.py --kill on|off           set the DynamoDB kill switch and publish the site's status.json
+    python seed_state.py --kill off --no-status  ... but leave status.json alone (private tests with the URL locked)
     python seed_state.py --status                re-publish status.json from the current kill switch
     python seed_state.py --set global_daily=100 anon_ip_daily=5   change limits in config#global
     python seed_state.py --show                  print config (no secrets)
@@ -47,6 +48,7 @@ def main() -> None:
     ap.add_argument("--set", nargs="*", default=[])
     ap.add_argument("--show", action="store_true")
     ap.add_argument("--status", action="store_true")
+    ap.add_argument("--no-status", action="store_true")
     a = ap.parse_args()
     session = boto3.Session(profile_name=PROFILE, region_name=REGION)
     db = session.client("dynamodb")
@@ -68,7 +70,8 @@ def main() -> None:
         db.put_item(TableName=TABLE, Item={"pk": {"S": "config#killswitch"}, "enabled": {"BOOL": a.kill == "on"},
                                            "reason": {"S": "set by seed_state.py"}})
         print("kill switch:", a.kill.upper())
-        write_status(session, a.kill == "off", "live" if a.kill == "off" else "paused")
+        if not a.no_status:
+            write_status(session, a.kill == "off", "live" if a.kill == "off" else "paused")
     if a.status:
         it = db.get_item(TableName=TABLE, Key={"pk": {"S": "config#killswitch"}}, ConsistentRead=True).get("Item", {})
         on = it.get("enabled", {}).get("BOOL", True)

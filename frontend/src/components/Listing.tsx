@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { extractCode, suggestFilename, tokenize, unusedImports } from "@/lib/python";
-import { RunState, active } from "@/lib/runMachine";
+import { RunState, active, waking } from "@/lib/runMachine";
 
 // onPlay: offered in the empty state, so a first look at the page has an obvious next step where the output goes.
 export function Listing({ run, onPlay }: { run: RunState; onPlay: () => void }) {
@@ -61,6 +61,9 @@ export function Listing({ run, onPlay }: { run: RunState; onPlay: () => void }) 
                 <p>Nothing generated yet. The code appears here token by token, at the speed the model wrote it on Lambda.</p>
                 <button type="button" className="btn-ghost silk" onClick={onPlay}>Play a recorded run ▸</button>
               </div>
+            ) : waking(run) ? (
+              <p className="waking">Waking up the model… The first request after a quiet spell starts a fresh copy on AWS
+                Lambda (usually 5–10 s). The code streams here as soon as it is ready.</p>
             ) : run.phase === "connecting" ? "waiting for first token…" : "No code in the response."}
           </div>
         )}

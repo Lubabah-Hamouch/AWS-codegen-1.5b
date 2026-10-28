@@ -122,7 +122,7 @@ frontend\scripts\deploy.ps1 -From frontend-out-<sha>.zip -DryRun   # what would 
 frontend\scripts\deploy.ps1 -From frontend-out-<sha>.zip           # s3 sync -> CloudFront invalidation
 ```
 
-Then run the **smoke** workflow (GitHub Actions tab -> smoke -> Run workflow): smoke, layout, a11y, test bench and intro specs
+Then run the **smoke** workflow (GitHub Actions tab -> smoke -> Run workflow): smoke, layout, a11y, test bench, intro and live-mode (simulated backend) specs
 against the deployed site, from a clean browser. `cd frontend; npx playwright test` runs the same locally.
 
 - The zip is the `frontend-out-<sha>` artifact of a green `ci` run (run page -> Artifacts). It is the build that passed
@@ -145,7 +145,12 @@ against the deployed site, from a clean browser. `cd frontend; npx playwright te
 - Plain-language block subtitles and the "How to read the schematic" key both come from `src/data/key.ts`.
 - Link previews: Open Graph / Twitter tags in `_document.tsx`, image `public/og.png` (1200x630, a screenshot of the
   intro). After changing the intro: build, `python scripts/serve_static.py`, `node scripts/og-image.mjs`, rebuild.
-- Checks: `npm test` (27 unit), `node scripts/contrast.mjs` (WCAG contrast of all four themes),
+- Live runs, as a visitor sees them: after 1.5 s with no response the page says "waking up the model" next to the
+  button, in U3 and in the listing (a cold start; usually 5-10 s). A 503 `starting` is retried by itself (it costs no
+  quota). No response after 95 s (the function's limit is 90 s) ends the run with an offer of a replay. At 0 runs left,
+  or once the shared budget is spent, Run is replaced in place by the reset time and a replay button.
+  `tests/e2e/livemock.spec.ts` covers all four against a simulated backend (safe against the deployed site).
+- Checks: `npm test` (31 unit), `node scripts/contrast.mjs` (WCAG contrast of all four themes),
   `LIVE=1 npx playwright test tests/e2e/live.spec.ts` (one real cross-origin run; kill switch must be OFF).
 - Local dev: `cd frontend; npm run dev` -> http://localhost:3000 (no status.json locally, so it starts in live mode).
 - Local check of the real build under the real CSP: `npm run build`, then `python scripts/serve_static.py` (serves `out/`
@@ -211,6 +216,16 @@ Not in CI: GPU training, real-model evals, the Lambda image and stacks, and the 
 - `infra/scripts/live_tests_model.py`: the guardrails against the deployed function.
 - `infra/scripts/live_tests_hardening.py`: client-IP spoofing, the warm-up rule and event, the circuit breaker end to end
   (it drives the real alarm into ALARM with `set-alarm-state`).
+  Both suites above open the Function URL to the public while they run.
+- `infra/scripts/live_tests_private.py [--breaker]`: the guardrails without ever opening the URL. It refuses to run unless
+  URL auth is `AWS_IAM`; requests are SigV4-signed with the operator's credentials, which AWS lets through, and the app
+  flag is opened with `seed_state.py --kill off --no-status`, so status.json stays "paused". Per-IP cap, concurrency cap
+  (160-token generations, long enough to outlast a cold start on a new instance), global cap, app kill switch.
+  `--breaker` trips the circuit breaker with real traffic: ~750 signed `GET /health` inside one aligned 5-minute period,
+  then waits for the alarm. The breaker writes status.json "circuit breaker" (public, for a few minutes) until the
+  script restores "paused". Run 2026-10-28: 750 calls in 39 s, ALARM 107 s later, kill flag set 1 s after that; quota
+  checks 9/9. Cost: well inside the free tier. The alarm returns to OK on its own about 5 minutes later; the breaker
+  only acts on a new transition into ALARM, so check it is OK before relying on it again.
 
 - `frontend`: `npm test`, `npx playwright test`, `node scripts/contrast.mjs` (see "Deploy the frontend").
 

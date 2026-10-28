@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ApiError, generate } from "@/lib/api";
+import { ApiError, generate, generateLive } from "@/lib/api";
 import { fmtDuration, secondsToUtcMidnight, toUiError } from "@/lib/errors";
 import { claimFirstVisit } from "@/lib/history";
 import { extractCode, suggestFilename, tokenize, unusedImports } from "@/lib/python";
@@ -173,5 +173,55 @@ describe("first visit (autoplay gate)", () => {
     vi.stubGlobal("localStorage", store(false));
     expect(claimFirstVisit()).toBe(false);
     vi.unstubAllGlobals();
+  });
+});
+
+describe("generateLive() (cold starts)", () => {
+  const starting = () => new Response(JSON.stringify({ error: "starting", code: "starting" }), { status: 503, headers: { "retry-after": "5" } });
+  const ok = () => sseResponse('event: token\ndata: {"t": "a"}\n\nevent: done\ndata: {"finish_reason": "stop", "tokens": 1}\n\n');
+  const noop = { onToken() {}, onDone() {} };
+
+  it("retries 503 starting after its retry-after, then streams", async () => {
+    vi.useFakeTimers();
+    const f = vi.fn().mockImplementationOnce(async () => starting()).mockImplementationOnce(async () => ok());
+    const retries: number[] = [];
+    let done: unknown = null;
+    const p = generateLive("p", { onToken() {}, onDone: (d) => (done = d) }, new AbortController().signal,
+      { fetchImpl: f as unknown as typeof fetch, onRetry: () => retries.push(Date.now()) });
+    await vi.advanceTimersByTimeAsync(5000);
+    await p;
+    expect(f).toHaveBeenCalledTimes(2);
+    expect(retries).toHaveLength(1);
+    expect(done).toMatchObject({ finish_reason: "stop" });
+    vi.useRealTimers();
+  });
+
+  it("gives up with code timeout when nothing arrives before the deadline", async () => {
+    vi.useFakeTimers();
+    const f = vi.fn((_u: unknown, init: RequestInit) => new Promise<Response>((_, reject) =>
+      init.signal!.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))));
+    const p = generateLive("p", noop, new AbortController().signal, { fetchImpl: f as unknown as typeof fetch, deadlineMs: 95_000 }).catch((x) => x);
+    await vi.advanceTimersByTimeAsync(95_000);
+    const e = await p;
+    expect(e.code).toBe("timeout");
+    expect(toUiError(e)).toMatchObject({ offerReplay: true, paused: false });
+    vi.useRealTimers();
+  });
+
+  it("the visitor's own Stop during a retry wait is a stop, not a timeout", async () => {
+    vi.useFakeTimers();
+    const ctl = new AbortController();
+    const p = generateLive("p", noop, ctl.signal, { fetchImpl: (async () => starting()) as unknown as typeof fetch }).catch((x) => x);
+    await vi.advanceTimersByTimeAsync(1000);
+    ctl.abort();
+    expect((await p).code).toBe("aborted");
+    vi.useRealTimers();
+  });
+
+  it("does not retry other refusals (quota is never spent twice)", async () => {
+    const f = vi.fn(async () => new Response(JSON.stringify({ error: "daily limit reached", code: "daily_limit" }), { status: 429 }));
+    const e = await generateLive("p", noop, new AbortController().signal, { fetchImpl: f as unknown as typeof fetch }).catch((x) => x);
+    expect(e.code).toBe("daily_limit");
+    expect(f).toHaveBeenCalledTimes(1);
   });
 });
