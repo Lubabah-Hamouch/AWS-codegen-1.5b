@@ -39,7 +39,7 @@ test("intro: what it is, what to do and the result are in the first screen", asy
     const b = await loc.boundingBox();
     return b !== null && b.y + b.height <= page.viewportSize()!.height;
   };
-  const lead = page.getByRole("heading", { name: /fine-tuned to answer in one clean, typed, documented function/ });
+  const lead = page.getByRole("heading", { name: /fine-tuned to almost always answer in one clean, typed, documented function/ });
   const cta = page.getByRole("button", { name: "Watch a recorded run ▸" });
   await expect(lead).toBeVisible();
   await expect(cta).toBeVisible();

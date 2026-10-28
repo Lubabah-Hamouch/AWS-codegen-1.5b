@@ -20,8 +20,8 @@ export function Intro({ status, playing, onWatch }: Props) {
     <section className="intro" aria-labelledby="intro-h">
       <div className="intro-main">
         <h2 id="intro-h" className="intro-lead">
-          A code model fine-tuned to answer in one clean, typed, documented function, nearly every time — then
-          deployed to AWS on a $0 budget.
+          A code model fine-tuned to almost always answer in one clean, typed, documented function, deployed to AWS
+          for $0.
         </h2>
         <ol className="intro-steps">
           <li><span className="n silk">1</span>Pick an example prompt</li>
