@@ -8,16 +8,16 @@ in AWS's new sign-up experience: AWS manages its Organization SCPs, and everythi
 | Layer | How | Speed |
 |---|---|---|
 | **1. App kill switch** | `python infra/scripts/seed_state.py --kill on` (DynamoDB flag `config#killswitch`) | **Immediate.** The next request gets 503 and no model work is done. |
-| **2. Function URL auth switch** | `infra/scripts/killswitch.ps1 on -FunctionName codegen-backend` (flips the URL to `AWS_IAM`; AWS answers 403 before any code runs) | **NOT instant. Measured 35-41 s before it took effect, ~25 s to reverse, and the status flaps (200/403/429) in between.** Occasionally ~3 s. Do not assume it has taken effect: poll `GET <url>/health` until it returns 403 twice in a row. |
+| **2. Function URL auth switch** | `infra/scripts/killswitch.ps1 on` (flips the URL to `AWS_IAM`; AWS answers 403 before any code runs) | **NOT instant. Measured 35-41 s before it took effect, ~25 s to reverse, and the status flaps (200/403/429) in between.** Occasionally ~3 s. Do not assume it has taken effect: poll `GET <url>/health` until it returns 403 twice in a row. |
 | **Automatic: circuit breaker** | CloudWatch alarm `codegen-backend-invocation-flood` (> 600 invocations in 5 min) -> SNS -> `codegen-breaker` Lambda engages layers 1 and 2 | Alarm needs one 5-minute period plus metric delay (a few minutes), then layer 2's propagation. |
 
 - Layer 1 is the real stop for *work*. Only layer 2 stops *invocations*, and every request that reaches the URL is a billed
   invocation even when the app refuses it. That is why the circuit breaker exists: in-app limits cannot cap the cost of a
   flood, so the breaker turns the URL off when invocations spike.
-- `killswitch.ps1` still defaults to the deleted `codegen-spike` function: **always pass `-FunctionName codegen-backend`**.
+- `killswitch.ps1` defaults to `codegen-backend`.
 - `killswitch.ps1 on` engages both layers. A later `sam deploy` resets layer 2 to the template (`AuthType: NONE`).
 - Both layers cut off traffic but do not stop an invocation already running; the longest is the 90 s function timeout.
-- After the breaker trips, recovery is manual: find the cause, then `killswitch.ps1 off -FunctionName codegen-backend`.
+- After the breaker trips, recovery is manual: find the cause, then `killswitch.ps1 off`.
 - The deployed state is parked with layer 1 **ON** unless someone has deliberately turned it off.
 
 Lambda reserved concurrency is not available (account quota is 10; AWS needs 100 unreserved). A quota increase

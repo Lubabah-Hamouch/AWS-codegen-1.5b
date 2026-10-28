@@ -12,7 +12,7 @@ propagate in both directions, and the status can flap meanwhile. Verify with an 
 Note: layer 2 changes a CloudFormation-managed setting; a later `sam deploy` resets it to what the template says (NONE).
 #>
 param([Parameter(Mandatory)][ValidateSet('on', 'off', 'status')][string]$Action,
-      [string]$FunctionName = 'codegen-spike')
+      [string]$FunctionName = 'codegen-backend')
 $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 $p = '--profile', 'codegen-spike', '--region', 'eu-north-1'
 $py = Join-Path $PSScriptRoot 'seed_state.py'
