@@ -86,3 +86,7 @@ desktop.ini
 *.log
 tmp/
 temp/
+
+# ---- Backend build inputs (large, fetched/copied locally; see backend/README.md) ----
+/backend/vendor/
+/backend/model/
