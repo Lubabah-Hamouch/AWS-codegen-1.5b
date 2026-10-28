@@ -26,7 +26,8 @@ def log(msg: str) -> None:
 
 def start_llama() -> None:
     cmd = [os.environ["LLAMA_BIN"], "-m", os.environ["MODEL_PATH"], "--host", "127.0.0.1", "--port", "8081",
-           "-t", THREADS, "-c", "2048", "--jinja", "--no-webui", "--parallel", "1"]
+           "-t", THREADS, "-c", "2048", "--jinja", "--no-webui", "--parallel", "1",
+           *os.environ.get("LLAMA_EXTRA", "").split()]  # later flags win, so LLAMA_EXTRA can override -c
     log(f"spawn llama-server threads={THREADS}")
     proc = subprocess.Popen(cmd, stdout=sys.stderr, stderr=sys.stderr)
     while proc.poll() is None:
