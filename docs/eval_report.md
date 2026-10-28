@@ -213,6 +213,76 @@ cannot find a paraphrased problem with different code.
   The model is evaluated on prompts phrased differently from its training instructions
   ("Complete the following function" with a docstring and signature), which is the harder case.
 
+## Failure analysis: where the shipped model fails
+
+The aggregate (64.0% HumanEval, 61.0% HumanEval+) hides what the failures are. Every task the shipped Q4_K_M GGUF
+fails was re-run from its saved answer to find the first failing test case: the input, what the code returned and
+what was expected (`training/eval/failure_analysis.py`; no new generation). All recorded failures reproduce: 59 on
+HumanEval (52 wrong answers, 7 crashes) and 64 on HumanEval+, 65 distinct tasks (6 fail only HumanEval+'s extra cases).
+All 65 answers are format-clean and stopped on their own: these are correctness failures, not format failures.
+
+Each task got one primary category, assigned by reading the case (several are borderline). "Base also fails" compares
+with the base model in bf16 on the same task; "failing input is in the prompt" means the first failing call is written
+literally in the task's own docstring examples (a lower bound: prompts that state examples differently are not counted).
+
+| Category | Failures | Base also fails | New vs base | Failing input is in the prompt |
+|---|---|---|---|---|
+| Dropped an explicit rule from the spec | 22 | 18 | 4 | 9 |
+| Solved a familiar neighbouring problem instead | 8 | 7 | 1 | 6 |
+| Wrong formula or algorithm | 14 | 6 | 8 | 7 |
+| Off-by-one or boundary | 6 | 3 | 3 | 4 |
+| Edge input (all HumanEval+ only) | 5 | 5 | 0 | 0 |
+| Runtime error (2 are missing imports) | 7 | 6 | 1 | 3 |
+| Typo-level slip | 3 | 1 | 2 | 1 |
+| **Total** | **65** | **46** | **19** | **30** |
+
+Fine-tuning fixed 21 tasks the base model fails and broke 19 it passes.
+
+### Representative examples
+
+- **Dropped a rule.** HumanEval/120 `maximum` returns `sorted(arr, reverse=True)[:k]`; the prompt's Example 1 needs
+  ascending order (`[-3, -4, 5], 3` gives `[5, -3, -4]`, expected `[-4, -3, 5]`). HumanEval/108 `count_nums` ignores
+  the stated rule that "-123 has signed digits -1, 2, and 3" (`[-1, -2, 0]` gives 2, expected 0).
+- **Neighbouring problem.** HumanEval/26 `remove_duplicates` writes ordinary de-duplication; the spec asks to remove
+  every element that occurs more than once (its own example: `[1, 2, 3, 2, 4]` is `[1, 3, 4]`). HumanEval/139
+  `special_factorial` writes a plain factorial (4 gives 24; the prompt's example says 288).
+- **Wrong formula or algorithm.** HumanEval/138 `is_equal_to_sum_even` tests `(n - 8) % 4 == 0`, so 10 gives False
+  (any even n >= 8 is a sum of four positive evens). HumanEval/38 `decode_cyclic` reverses each group of three instead
+  of undoing the rotation.
+- **Off-by-one.** HumanEval/127 `intersection` takes the length as `end - start + 1`: (-1, 1) and (0, 4) overlap in
+  (0, 1), length 1, not prime, so "NO"; the code computes 2 and answers "YES". HumanEval/123 `get_odd_collatz` stops
+  the sequence before 1, so 1 is missing.
+- **Edge input.** HumanEval/22 `filter_integers` keeps `True` and `False` (`bool` is a subclass of `int`).
+  HumanEval/44 `change_base(0, 3)` returns `''` instead of `'0'`.
+- **Runtime error.** HumanEval/136 annotates its return as `Tuple[Optional[int], Optional[int]]` but imports only
+  `List, Tuple`, so it fails with a NameError when the function is defined. This one comes from the fine-tune's
+  type-hint habit; the base model passes the task. HumanEval/77 `iscube(-1)`: the cube root of a negative number is
+  complex in Python, and `round()` rejects it.
+- **Typo-level slip.** HumanEval/79 has a stray `.` in the f-string (`f"db{...}.db"`). HumanEval/91 calls
+  `S.split('.?!')`, which splits on that three-character string, not on any of the three characters.
+
+### What this says about a second fine-tune
+
+- **Spec reading dominates, and it is inherited.** 30 of 65 failures drop a rule or solve a neighbouring problem, and
+  25 of those 30 fail for the base model too. The format fine-tune neither caused nor fixed them; a second fine-tune
+  aimed at correctness would need data that rewards following every stated rule, not more format examples.
+- **About half the failures contradict the prompt's own examples.** 30 of 65 fail on an input written in their own
+  docstring. Two ways to use that: filter training data by running the prompt's examples as well as the generated
+  tests, or an inference-time self-check that runs them and retries. Caution: HumanEval's tests include those same
+  examples, so a self-check would inflate pass@1 and the result would not be comparable with the numbers above.
+- **A cheap fix with no training:** the format checks now flag any name used in a type hint that is never imported
+  (`format_checks.py`, reason `unimported_hint_name`), in both the training-data filter and eval scoring. Over the
+  five saved eval runs (820 answers) it flags exactly one answer per run where it applies: HumanEval/136, in the
+  shipped GGUF and in the checkpoint it came from; no false positives. Under the stricter check the shipped model's
+  format-clean rate would be 162/164 (98.8%) instead of 163/164 (99.4%); the numbers in this report use the check as
+  it was when they were measured. The SFT data had 6 such examples out of 4,535 (`Generator`, `Callable`, `Tuple`,
+  `Foo`), all in quoted annotations, which do not fail at runtime; HumanEval/136's was unquoted, which does.
+- **Tuple immutability does not show up here.** No HumanEval failure is an assignment into a tuple. The playground's
+  merge_intervals recording fails exactly that way (`merged[-1][1] = ...` on a tuple), but HumanEval cannot measure it;
+  scoping training on it would need its own probe set first.
+- **Limits.** One label per task, assigned by hand. 164 tasks give about ±7 points of noise, and per-category counts
+  of 5 to 8 are too small to scope a training run on their own.
+
 ## Reproduction
 
 ```bash
@@ -221,6 +291,7 @@ python humaneval_eval.py gen   --config ckpt250 --check-bs1 10   # also: base_nf
 python humaneval_eval.py score --config ckpt250
 python humaneval_eval.py table
 python contamination_check.py
+python failure_analysis.py diagnose && python failure_analysis.py table   # saved outputs only
 ```
 
 Outputs go to `~/work/eval/` (outside the repo). Execution uses the data pipeline's sandbox

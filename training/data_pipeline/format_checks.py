@@ -4,11 +4,12 @@
 All reasons are collected (not just the first) so we can see which failures co-occur.
 
 Target contract: the whole response is exactly one fenced Python block, the code parses, every
-function/method/class has a docstring, every function is fully type-annotated, and generation
-ended on its own (no truncation, no runaway repetition).
+function/method/class has a docstring, every function is fully type-annotated, every name used in a
+type hint is imported or defined, and generation ended on its own (no truncation, no runaway repetition).
 """
 
 import ast
+import builtins
 import re
 from collections import Counter
 
@@ -25,6 +26,7 @@ REASONS = (
     "missing_docstring",
     "missing_param_hints",
     "missing_return_hint",
+    "unimported_hint_name",
     "repetition",
 )
 
@@ -64,6 +66,55 @@ def _param_hints_missing(fn, is_method: bool) -> bool:
         params = params[1:]
     params += [x for x in (a.vararg, a.kwarg) if x is not None]
     return any(p.annotation is None for p in params)
+
+
+def _annotation_names(node: ast.AST) -> set[str]:
+    """Top-level names an annotation needs (`Optional[int]` -> Optional, int; `typing.List` -> typing)."""
+    names: set[str] = set()
+    for n in ast.walk(node):
+        if isinstance(n, ast.Name):
+            names.add(n.id)
+        elif isinstance(n, ast.Constant) and isinstance(n.value, str):  # quoted forward reference
+            try:
+                names |= _annotation_names(ast.parse(n.value, mode="eval"))
+            except SyntaxError:
+                pass
+    return names
+
+
+def unimported_hint_names(tree: ast.AST) -> set[str]:
+    """Names used in type hints that are neither builtins, imported, nor defined in the code.
+
+    `def f() -> Optional[int]` with only `from typing import List` raises NameError when the function is defined.
+    A star import makes this unknowable, so it reports nothing then.
+    """
+    used: set[str] = set()
+    known = set(dir(builtins))
+    for n in ast.walk(tree):
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            a = n.args
+            params = list(a.posonlyargs) + list(a.args) + list(a.kwonlyargs) + [x for x in (a.vararg, a.kwarg) if x]
+            for ann in [p.annotation for p in params] + [n.returns]:
+                if ann is not None:
+                    used |= _annotation_names(ann)
+            known.add(n.name)
+        elif isinstance(n, ast.AnnAssign):
+            used |= _annotation_names(n.annotation)
+            known |= {x.id for x in ast.walk(n.target) if isinstance(x, ast.Name)}
+        elif isinstance(n, ast.ClassDef):
+            known.add(n.name)
+        elif isinstance(n, ast.Import):
+            known |= {(al.asname or al.name).split(".")[0] for al in n.names}
+        elif isinstance(n, ast.ImportFrom):
+            if any(al.name == "*" for al in n.names):
+                return set()
+            known |= {al.asname or al.name for al in n.names}
+        elif isinstance(n, (ast.Assign, ast.AugAssign)):
+            for t in (n.targets if isinstance(n, ast.Assign) else [n.target]):
+                known |= {x.id for x in ast.walk(t) if isinstance(x, ast.Name)}
+        elif isinstance(n, ast.TypeAlias if hasattr(ast, "TypeAlias") else ()):
+            known.add(n.name.id)
+    return used - known
 
 
 def _has_repetition(code: str) -> bool:
@@ -118,6 +169,8 @@ def check_response(text: str, hit_eos: bool) -> list[str]:
         reasons.append("missing_param_hints")
     if any(f.returns is None and f.name != "__init__" for f in fns):
         reasons.append("missing_return_hint")
+    if unimported_hint_names(tree):
+        reasons.append("unimported_hint_name")
     if _has_repetition(code):
         reasons.append("repetition")
     return reasons

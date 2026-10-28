@@ -107,3 +107,56 @@ def test_repetition():
     body = "\n".join(["    print('x')"] * 8)
     code = f'```python\ndef f() -> None:\n    """Doc."""\n{body}\n```'
     assert "repetition" in reasons(code)
+
+
+def _hint(code):
+    return reasons("```python\n" + code.strip() + "\n```")
+
+
+def test_unimported_hint_name_is_flagged():
+    # HumanEval/136 as the shipped model wrote it: Optional is used in the hint but never imported (NameError at def)
+    code = '''
+from typing import List, Tuple
+
+def f(lst: List[int]) -> Tuple[Optional[int], Optional[int]]:
+    """Doc."""
+    return (None, None)
+'''
+    assert "unimported_hint_name" in _hint(code)
+
+
+def test_imported_builtin_and_local_hint_names_pass():
+    code = '''
+import typing
+from typing import Optional as Opt
+from collections.abc import Iterable
+
+class Node:
+    """A node."""
+
+Vector: typing.TypeAlias = list[float]
+Pair = tuple[int, int]
+
+def f(a: Opt[int], b: Iterable[str], c: "Node", d: Vector, e: Pair, *xs: int, **kw: dict) -> typing.List[bool]:
+    """Doc."""
+    return []
+'''
+    assert "unimported_hint_name" not in _hint(code)
+
+
+def test_quoted_forward_reference_is_checked():
+    code = '''
+def f(a: "Optional[int]") -> None:
+    """Doc."""
+'''
+    assert "unimported_hint_name" in _hint(code)
+
+
+def test_star_import_is_not_guessed():
+    code = '''
+from typing import *
+
+def f(a: Optional[int]) -> None:
+    """Doc."""
+'''
+    assert "unimported_hint_name" not in _hint(code)
