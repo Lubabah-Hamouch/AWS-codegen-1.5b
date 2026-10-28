@@ -1,0 +1,27 @@
+[
+ {
+  "id": "fibonacci",
+  "title": "fibonacci",
+  "prompt": "Write a Python function that returns the nth Fibonacci number."
+ },
+ {
+  "id": "palindrome",
+  "title": "is_palindrome",
+  "prompt": "Write a function that checks whether a string is a palindrome, ignoring case and punctuation."
+ },
+ {
+  "id": "merge-intervals",
+  "title": "merge_intervals",
+  "prompt": "Write a function that merges overlapping intervals in a list of (start, end) tuples."
+ },
+ {
+  "id": "roman",
+  "title": "roman_to_int",
+  "prompt": "Write a function that converts a Roman numeral string to an integer."
+ },
+ {
+  "id": "anagrams",
+  "title": "group_anagrams",
+  "prompt": "Write a function that groups a list of words into anagram groups."
+ }
+]

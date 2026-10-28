@@ -1,0 +1,10 @@
+/node_modules
+/.next
+/out
+/test-results
+/playwright-report
+next-env.d.ts
+*.tsbuildinfo
+# public config (the Function URL is not a secret); the repo root ignores .env*
+!.env.production
+!.env.development
