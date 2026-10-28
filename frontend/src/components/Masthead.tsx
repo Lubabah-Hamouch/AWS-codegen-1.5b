@@ -54,7 +54,7 @@ export function Masthead({ page }: { page: "schematic" | "datasheet" }) {
 export function Footer() {
   return (
     <footer className="foot">
-      <span>Qwen2.5-Coder-1.5B-Instruct (Apache-2.0) fine-tuned on self-oss-instruct prompts (ODC-By). Outputs are unreviewed model output.</span>
+      <span>Qwen2.5-Coder-1.5B-Instruct (Apache-2.0) fine-tuned on self-oss-instruct prompts (ODC-By). Outputs are unreviewed model output, with one automatic fix: missing typing imports are added and marked.</span>
       <span><Link href="/notes/">Datasheet</Link> · theme <kbd>Shift</kbd>+<kbd>T</kbd></span>
     </footer>
   );

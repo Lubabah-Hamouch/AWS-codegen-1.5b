@@ -1,0 +1,114 @@
+{
+ "_note": "Shared cases for training/data_pipeline/typing_fix.py and frontend/src/lib/typingFix.ts. Expected values come from the Python fixer; both implementations must reproduce them.",
+ "cases": [
+  {
+   "name": "humaneval_136_optional_missing",
+   "code": "from typing import List, Tuple\n\ndef f(lst: List[int]) -> Tuple[Optional[int], Optional[int]]:\n    return (None, None)\n",
+   "added": [
+    "Optional"
+   ],
+   "fixed": "from typing import List, Tuple, Optional\n\ndef f(lst: List[int]) -> Tuple[Optional[int], Optional[int]]:\n    return (None, None)\n"
+  },
+  {
+   "name": "no_typing_import_at_all",
+   "code": "def f(m: Tuple[int, int]) -> List[int]:\n    return list(m)\n",
+   "added": [
+    "List",
+    "Tuple"
+   ],
+   "fixed": "from typing import List, Tuple\ndef f(m: Tuple[int, int]) -> List[int]:\n    return list(m)\n"
+  },
+  {
+   "name": "already_imported",
+   "code": "from typing import List\n\ndef f(a: List[int]) -> int:\n    return 0\n",
+   "added": [],
+   "fixed": "from typing import List\n\ndef f(a: List[int]) -> int:\n    return 0\n"
+  },
+  {
+   "name": "builtin_generics",
+   "code": "def f(a: list[int]) -> tuple[int, int]:\n    return (a[0], a[1])\n",
+   "added": [],
+   "fixed": "def f(a: list[int]) -> tuple[int, int]:\n    return (a[0], a[1])\n"
+  },
+  {
+   "name": "star_import",
+   "code": "from typing import *\n\ndef f(a: Optional[int]) -> None:\n    pass\n",
+   "added": [],
+   "fixed": "from typing import *\n\ndef f(a: Optional[int]) -> None:\n    pass\n"
+  },
+  {
+   "name": "non_typing_name_out_of_scope",
+   "code": "def f(a: ndarray) -> Foo:\n    return a\n",
+   "added": [],
+   "fixed": "def f(a: ndarray) -> Foo:\n    return a\n"
+  },
+  {
+   "name": "after_future_import",
+   "code": "from __future__ import annotations\n\ndef f(a: Optional[int]) -> None:\n    pass\n",
+   "added": [
+    "Optional"
+   ],
+   "fixed": "from __future__ import annotations\nfrom typing import Optional\n\ndef f(a: Optional[int]) -> None:\n    pass\n"
+  },
+  {
+   "name": "quoted_hint",
+   "code": "def f() -> 'Generator[int, None, None]':\n    yield 1\n",
+   "added": [
+    "Generator"
+   ],
+   "fixed": "from typing import Generator\ndef f() -> 'Generator[int, None, None]':\n    yield 1\n"
+  },
+  {
+   "name": "typing_line_with_comment",
+   "code": "from typing import List  # types\n\ndef f(a: Dict[str, int]) -> List[int]:\n    return []\n",
+   "added": [
+    "Dict"
+   ],
+   "fixed": "from typing import List, Dict  # types\n\ndef f(a: Dict[str, int]) -> List[int]:\n    return []\n"
+  },
+  {
+   "name": "syntax_error_untouched",
+   "code": "def f(a: List[int] -> int:\n    return 0\n",
+   "added": [],
+   "fixed": "def f(a: List[int] -> int:\n    return 0\n"
+  },
+  {
+   "name": "module_level_annotation",
+   "code": "x: Dict[str, int] = {}\n",
+   "added": [
+    "Dict"
+   ],
+   "fixed": "from typing import Dict\nx: Dict[str, int] = {}\n"
+  },
+  {
+   "name": "parenthesized_typing_import",
+   "code": "from typing import (\n    List,\n)\n\ndef f(a: Tuple[int]) -> List[int]:\n    return []\n",
+   "added": [
+    "Tuple"
+   ],
+   "fixed": "from typing import Tuple\nfrom typing import (\n    List,\n)\n\ndef f(a: Tuple[int]) -> List[int]:\n    return []\n"
+  },
+  {
+   "name": "method_parameter",
+   "code": "class A:\n    def m(self, x: Optional[int]) -> None:\n        pass\n",
+   "added": [
+    "Optional"
+   ],
+   "fixed": "from typing import Optional\nclass A:\n    def m(self, x: Optional[int]) -> None:\n        pass\n"
+  },
+  {
+   "name": "typing_module_import_with_bare_name",
+   "code": "import typing\n\ndef f(a: typing.List[int]) -> Tuple[int]:\n    return (1,)\n",
+   "added": [
+    "Tuple"
+   ],
+   "fixed": "from typing import Tuple\nimport typing\n\ndef f(a: typing.List[int]) -> Tuple[int]:\n    return (1,)\n"
+  },
+  {
+   "name": "name_in_body_not_hint_ignored",
+   "code": "def f(a: int) -> int:\n    x = List\n    return a\n",
+   "added": [],
+   "fixed": "def f(a: int) -> int:\n    x = List\n    return a\n"
+  }
+ ]
+}

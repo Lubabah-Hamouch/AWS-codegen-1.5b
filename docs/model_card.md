@@ -42,12 +42,15 @@ release b11856. Chat template (ChatML) is embedded in the GGUF; use `--jinja` / 
 
 ## Evaluation (HumanEval / HumanEval+, 164 tasks, greedy pass@1, max 768 tokens, seed 42)
 
-| | base bf16 | merged bf16 | **Q4_K_M GGUF** |
-|---|---|---|---|
-| HumanEval | 65.2% | 70.1% | **64.0%** |
-| HumanEval+ | 59.1% | 66.5% | **61.0%** |
-| Format-clean | 5.5% | 100% | **98.8%** |
-| Stops on its own | 99.4% | 100% | **100%** |
+| | base bf16 | merged bf16 | Q4_K_M GGUF, model output | **Q4_K_M, as served** |
+|---|---|---|---|---|
+| HumanEval | 65.2% | 70.1% | 64.0% | **64.6%** |
+| HumanEval+ | 59.1% | 66.5% | 61.0% | **61.6%** |
+| Format-clean | 5.5% | 100% | 98.8% | **99.4%** |
+| Stops on its own | 99.4% | 100% | 100% | **100%** |
+
+As served: the playground adds a missing `typing` import when the model uses a typing name in a type hint without
+importing it (a generation-time mitigation, not a change to the model; 1 answer of 164 on HumanEval).
 
 Quantising costs about 6 points against merged bf16 (not significant at n=164; p = 0.12 / 0.18) and leaves
 the model level with the original base. Differences against the base are within noise (±7 points); do not read

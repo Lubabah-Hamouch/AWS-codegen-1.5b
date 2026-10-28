@@ -238,10 +238,18 @@ def build_program(prompt: str, code: str) -> str:
     return prompt + "\n\n" + code
 
 
-def score(config: str) -> dict:
+def score(config: str, served: bool = False) -> dict:
+    """Score saved answers. served=True scores them as the playground serves them: with the generation-time typing
+    import fix (data_pipeline/typing_fix.py) applied first. Written to scored_<config>_served.json; the raw-model
+    scores in scored_<config>.json are left as they are."""
     tasks = {t["task_id"]: t for t in load_tasks()}
     data = json.loads((OUT / f"gen_{config}.json").read_text(encoding="utf-8"))
     recs = data["records"]
+    if served:
+        from typing_fix import fix_response
+
+        recs = [{**r, "response": fixed, "typing_fix_added": added}
+                for r in recs for fixed, added in [fix_response(r["response"])]]
     codes = [pick_code(r["response"], tasks[r["task_id"]]["entry_point"]) for r in recs]
 
     def jobs(kind: str, defs: bool = False):
@@ -279,7 +287,8 @@ def score(config: str) -> dict:
                      "heplus_reason": res["plus"].get(i, (False, "no_code"))[1]})
     n = len(rows)
     summ = {
-        "config": config, "n_tasks": n, "gen_seconds": data["gen_seconds"], "bs1_agreement": data["bs1_agreement"],
+        "config": config, "served": served, "n_tasks": n,
+        "typing_fixes": {r["task_id"]: r["typing_fix_added"] for r in rows if r.get("typing_fix_added")}, "gen_seconds": data["gen_seconds"], "bs1_agreement": data["bs1_agreement"],
         "pass@1_humaneval": sum(r["pass_he"] for r in rows) / n,
         "pass@1_humaneval_plus": sum(r["pass_heplus"] for r in rows) / n,
         "pass@1_humaneval_defs_only": sum(r["pass_he_defs"] for r in rows) / n,
@@ -296,7 +305,7 @@ def score(config: str) -> dict:
             "format_bad&pass": sum((not r["format_ok"]) and r["pass_he"] for r in rows),
             "format_bad&fail": sum((not r["format_ok"]) and not r["pass_he"] for r in rows)},
     }
-    (OUT / f"scored_{config}.json").write_text(json.dumps({"summary": summ, "rows": rows}, indent=1, ensure_ascii=False),
+    (OUT / f"scored_{config}{'_served' if served else ''}.json").write_text(json.dumps({"summary": summ, "rows": rows}, indent=1, ensure_ascii=False),
                                               encoding="utf-8")
     print(json.dumps(summ, indent=1))
     return summ
@@ -321,6 +330,7 @@ def main() -> None:
     ap.add_argument("--max-new-tokens", type=int, default=768)
     ap.add_argument("--gguf", help="path to the .gguf (config gguf_q4km)")
     ap.add_argument("--threads", type=int, default=12)
+    ap.add_argument("--served", action="store_true", help="score with the generation-time typing import fix applied")
     ap.add_argument("--parallel", type=int, default=4, help="llama-server slots (concurrent requests)")
     a = ap.parse_args()
     if a.stage == "gen" and a.config == "gguf_q4km":
@@ -328,7 +338,7 @@ def main() -> None:
     elif a.stage == "gen":
         generate(a.config, a.check_bs1, a.batch, a.max_new_tokens)
     elif a.stage == "score":
-        score(a.config)
+        score(a.config, a.served)
     else:
         table()
 

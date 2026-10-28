@@ -20,6 +20,10 @@ Qwen2.5-Coder-1.5B-Instruct. Benchmarks: HumanEval and HumanEval+ (164 tasks eac
 > answers with the extended check moves checkpoint-250 from 100% to 99.4% (163/164) and the shipped Q4_K_M GGUF from
 > 99.4% to **98.8% (162/164)**. Base and merged runs have no such answers and are unchanged; pass@1 is unchanged
 > everywhere (the tests were re-run). The site, README and model card show the new figures.
+>
+> **Changed 2026-10-29: as-served figures added.** The playground now applies a generation-time fix for that defect
+> (see "Shipped mitigation" below). The shipped model as served scores 64.6% HumanEval, 61.6% HumanEval+ and 99.4%
+> format-clean; every other table in this report is the model's own output, without the fix.
 
 ## Results
 
@@ -280,7 +284,7 @@ Fine-tuning fixed 21 tasks the base model fails and broke 19 it passes.
   docstring. Two ways to use that: filter training data by running the prompt's examples as well as the generated
   tests, or an inference-time self-check that runs them and retries. Caution: HumanEval's tests include those same
   examples, so a self-check would inflate pass@1 and the result would not be comparable with the numbers above.
-- **A cheap fix with no training:** the format checks now flag any name used in a type hint that is never imported
+- **A cheap fix with no training, now shipped** (see "Shipped mitigation" below): the format checks now flag any name used in a type hint that is never imported
   (`format_checks.py`, reason `unimported_hint_name`), in both the training-data filter and eval scoring. Over the
   five saved eval runs (820 answers) it flags exactly one answer per run where it applies: HumanEval/136, in the
   shipped GGUF and in the checkpoint it came from; no false positives. Both runs were re-scored with it: the shipped
@@ -305,15 +309,15 @@ Prompting is the deployed one (the request as the only user message), greedy, ma
 executed, so example calls a model appends cannot crash the run before the tests (the base model appends them to most
 answers).
 
-| Outcome (one per task) | Base Q4_K_M | Shipped Q4_K_M |
-|---|---|---|
-| Correct | 24 | 23 |
-| `TypeError: 'tuple' object does not support item assignment` | 3 | 3 |
-| Other attempt to change a tuple in place | 0 | 0 |
-| Right values, lists instead of the tuples asked for | 0 | 2 |
-| Wrong answer | 7 | 4 |
-| Other error | 6 | 8 |
-| Changed the caller's input (any outcome) | 4 | 6 |
+| Outcome (one per task) | Base Q4_K_M | Shipped Q4_K_M | Shipped, as served |
+|---|---|---|---|
+| Correct | 24 | 23 | 27 |
+| `TypeError: 'tuple' object does not support item assignment` | 3 | 3 | 3 |
+| Other attempt to change a tuple in place | 0 | 0 | 0 |
+| Right values, lists instead of the tuples asked for | 0 | 2 | 2 |
+| Wrong answer | 7 | 4 | 4 |
+| Other error | 6 | 8 | 4 |
+| Changed the caller's input (any outcome) | 4 | 6 | 6 |
 
 - **Tuple immutability is a shared, base-model trait, at about 3 in 40.** Two of the three tasks are the same for both
   models, and so is the mistake: copying a tuple of tuples shallowly (`new_board = list(board)`) and then assigning into
@@ -329,6 +333,34 @@ answers).
   prompts did not forbid it, but it is the playground recording's second problem.
 - **Limits.** 40 tasks, one greedy sample each: differences of 1 to 3 tasks between the models are noise. The probe
   measures how often the mistake happens, not why.
+
+## Shipped mitigation: typing import fix (generation time, not a retrain)
+
+The defect found above, a `typing` name used in a type hint but never imported, is mechanical, so it is fixed after
+generation instead of by training: `fix_typing_imports` (`training/data_pipeline/typing_fix.py`) adds the missing
+names to the answer's `from typing import` line, or inserts one, and changes nothing else. It only ever imports names
+from `typing`, and only when `unimported_hint_names` reports them. The playground runs a browser version of the same
+fix (`frontend/src/lib/typingFix.ts`) before an answer is shown, copied, saved or run, and marks the added line; live
+answers and replays get it the same way, and recordings are stored unedited. The two implementations share their test
+cases and produce identical results on all 899 saved answers (five HumanEval runs, both probe runs).
+
+**This is not a retrain.** The model and its weights are unchanged, no training data was touched, and every number
+elsewhere in this report is the model's own output. "As served" means the model's output with this one fix applied.
+
+| Shipped Q4_K_M | Model output | As served | Answers changed by the fix |
+|---|---|---|---|
+| HumanEval pass@1 | 64.0% (105/164) | **64.6% (106/164)** | 1 (HumanEval/136, `Optional`) |
+| HumanEval+ pass@1 | 61.0% (100/164) | **61.6% (101/164)** | same answer |
+| Format-clean | 98.8% (162/164) | **99.4% (163/164)** | same answer |
+| Tuple probe, correct | 23/40 | **27/40** | 5 (`Tuple` ×4, `List`, `Optional`) |
+
+With its import added, HumanEval/136 passes both test suites, so the fix moves pass@1 as well as format. On the tuple
+probe 4 of the 5 fixed answers become correct, putting the shipped model above the base model (24/40); the tuple
+item-assignment failures are unchanged (3), as they should be: the fix only adds imports. The remaining format
+failure on HumanEval is a missing return type hint, which this fix does not touch.
+
+Reproduce: `python humaneval_eval.py score --config gguf_q4km --served` and `python tuple_probe.py score --name gguf_q4km --served`
+(scores the saved answers with the fix applied; writes `*_served.json` next to the raw scores).
 
 ## Reproduction
 

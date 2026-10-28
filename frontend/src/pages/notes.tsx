@@ -100,7 +100,9 @@ export default function Notes() {
               <p>
                 A QLoRA fine-tune of {MODEL.base} that answers a request for a Python function with exactly one fenced
                 block, with a docstring and full type hints, and then stops. It is a format adaptation, not a capability upgrade:
-                format compliance went from 5.5% to {EVAL.formatClean}%, while correctness stayed level with the base model.
+                format compliance went from 5.5% to {EVAL.model.formatClean}%, while correctness stayed level with the base model.
+                As served, one automatic fix adds typing imports the model used but did not write (format-clean {EVAL.formatClean}%;
+                see Evaluation).
               </p>
               <ul>
                 <li>Shipped as a {MODEL.quant} GGUF ({MODEL.sizeMb} MB), served by {MODEL.runtime} on {HOST.target}, {HOST.memoryMb} MB, {HOST.threads} threads.</li>
@@ -158,10 +160,17 @@ export default function Notes() {
 
             <Sec id="eval" title="Evaluation" rev="HumanEval / HumanEval+ · 164 tasks · greedy pass@1">
               <Bars label="HumanEval pass@1 (the shipped GGUF is highlighted)"
-                items={[["base bf16", 65.2], ["merged bf16", 70.1], ["Q4_K_M GGUF (shipped)", 64.0, true]]} />
+                items={[["base bf16", 65.2], ["merged bf16", 70.1], ["Q4_K_M GGUF (model output)", EVAL.model.humaneval, true]]} />
               <Bars label="Format-clean responses: one block, docstring, type hints, clean stop"
-                items={[["base bf16", 5.5], ["merged bf16", 100], ["Q4_K_M GGUF (shipped)", EVAL.formatClean, true]]} />
-              <Table head={["", "base bf16", "merged bf16", "Q4_K_M GGUF (shipped)"]} rows={EVAL.exported} num={[1, 2, 3]} ship={3} />
+                items={[["base bf16", 5.5], ["merged bf16", 100], ["Q4_K_M GGUF (model output)", EVAL.model.formatClean, true]]} />
+              <Table head={["", "base bf16", "merged bf16", "Q4_K_M model output", "Q4_K_M as served"]} rows={EVAL.exported} num={[1, 2, 3, 4]} ship={4} />
+              <p>
+                <strong>As served</strong> means one automatic fix, applied after generation: when the model uses a typing name
+                in a type hint (<code>Tuple</code>, <code>Optional</code>, …) without importing it, the import is added and the
+                listing marks the line. It is a shipped mitigation, not a retrain; the model itself is unchanged. On HumanEval it
+                changes one answer of 164 (HumanEval/136, which then passes). On a 40-task tuple probe it changes 5 and moves the
+                shipped model from 23 to 27 correct (the base model: 24).
+              </p>
               <p>
                 Read it as: <strong>the format was learned and correctness did not move.</strong> With 164 tasks one pass@1
                 figure carries about ±7 points of noise. Quantising to Q4_K_M costs ~6 points against the merged bf16 model

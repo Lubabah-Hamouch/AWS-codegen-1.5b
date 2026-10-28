@@ -82,7 +82,8 @@ python eval/humaneval_eval.py gen --config gguf_q4km --gguf ckpt250-Q4_K_M.gguf 
 python eval/report_tables.py base_bf16 merged_bf16 gguf_q4km
 ```
 
-The Q4_K_M GGUF scores **64.0%** HumanEval and **61.0%** HumanEval+, with 98.8% format-clean output. The full results,
+The Q4_K_M GGUF scores **64.0%** HumanEval and **61.0%** HumanEval+, with 98.8% format-clean output (64.6% / 61.6% /
+99.4% as served, with the generation-time typing import fix in `data_pipeline/typing_fix.py`; not a retrain). The full results,
 including why accuracy did not really improve, are in [docs/eval_report.md](../docs/eval_report.md); the model's specs
 are in [docs/model_card.md](../docs/model_card.md).
 

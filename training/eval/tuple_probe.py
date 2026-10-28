@@ -191,16 +191,25 @@ def gen(name: str, gguf: str, threads: int, parallel: int) -> None:
     print(f"[{name}] {len(recs)} answers in {gen_s:.0f}s")
 
 
-def score(name: str) -> None:
+def score(name: str, served: bool = False) -> None:
+    """served=True applies the generation-time typing import fix first and writes probe_tuples_<name>_served.json."""
     path = OUT / f"probe_tuples_{name}.json"
     data = json.loads(path.read_text(encoding="utf-8"))
     by_id = {t["id"]: t for t in TASKS}
+    if served:
+        from typing_fix import fix_response
+
+        for r in data["records"]:
+            r["response"], r["typing_fix_added"] = fix_response(r["response"])
+        path = OUT / f"probe_tuples_{name}_served.json"
+        data["name"], data["served"] = f"{name}_served", True
     for r in data["records"]:
         code = code_of(r["response"])
         r["score"] = {"outcome": "no_code", "mutated_input": False, "cases": []} if code is None else run(code, by_id[r["id"]])
     data["summary"] = {"outcomes": dict(Counter(r["score"]["outcome"] for r in data["records"])),
                        "mutated_input": sum(r["score"]["mutated_input"] for r in data["records"]),
-                       "stopped_on_eos": sum(r["hit_eos"] for r in data["records"])}
+                       "stopped_on_eos": sum(r["hit_eos"] for r in data["records"]),
+                       "typing_fixes": {r["id"]: r["typing_fix_added"] for r in data["records"] if r.get("typing_fix_added")}}
     path.write_text(json.dumps(data, indent=1, ensure_ascii=False), encoding="utf-8")
     print(f"[{name}]", data["summary"])
 
@@ -231,12 +240,13 @@ if __name__ == "__main__":
     ap.add_argument("--gguf")
     ap.add_argument("--threads", type=int, default=12)
     ap.add_argument("--parallel", type=int, default=4)
+    ap.add_argument("--served", action="store_true", help="score with the generation-time typing import fix applied")
     a = ap.parse_args()
     if a.stage == "validate":
         validate()
     elif a.stage == "gen":
         gen(a.name, a.gguf, a.threads, a.parallel)
     elif a.stage == "score":
-        score(a.name)
+        score(a.name, a.served)
     else:
         table(a.names)

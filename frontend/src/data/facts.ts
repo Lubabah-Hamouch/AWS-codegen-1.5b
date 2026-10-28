@@ -49,22 +49,26 @@ export const BUDGET = {
 };
 
 export const EVAL = {
-  humaneval: 64.0,
-  humanevalPlus: 61.0,
-  formatClean: 98.8, // 162/164; was 99.4 before the type-hint import check (docs/eval_report.md, 2026-10-28)
+  // As served: the model's answers with the generation-time typing import fix applied (frontend/src/lib/typingFix.ts;
+  // a shipped mitigation, not a retrain). It changes 1 of 164 answers (HumanEval/136). docs/eval_report.md
+  humaneval: 64.6, // 106/164
+  humanevalPlus: 61.6, // 101/164
+  formatClean: 99.4, // 163/164
+  // The model's own output, no fix: what the fine-tune itself achieved (used wherever the fine-tune is compared)
+  model: { humaneval: 64.0, humanevalPlus: 61.0, formatClean: 98.8 },
   eos: 100,
   meanTokens: 167,
   noisePt: 7,
   // the base model, same prompt and scoring (base bf16 column below)
   base: { humaneval: 65.2, formatClean: 5.5, meanTokens: 300, proseAfter: 154 },
   tasks: 164,
-  // rows: [label, base bf16, merged bf16, Q4_K_M GGUF (shipped)]
+  // rows: [label, base bf16, merged bf16, Q4_K_M model output, Q4_K_M as served (typing import fix)]
   exported: [
-    ["HumanEval pass@1", "65.2% (107/164)", "70.1% (115/164)", "64.0% (105/164)"],
-    ["HumanEval+ pass@1", "59.1% (97/164)", "66.5% (109/164)", "61.0% (100/164)"],
-    ["Format-clean", "5.5% (9/164)", "100% (164/164)", "98.8% (162/164)"],
-    ["Stopped on its own", "99.4%", "100%", "100%"],
-    ["Mean response tokens", "300", "167", "167"],
+    ["HumanEval pass@1", "65.2% (107/164)", "70.1% (115/164)", "64.0% (105/164)", "64.6% (106/164)"],
+    ["HumanEval+ pass@1", "59.1% (97/164)", "66.5% (109/164)", "61.0% (100/164)", "61.6% (101/164)"],
+    ["Format-clean", "5.5% (9/164)", "100% (164/164)", "98.8% (162/164)", "99.4% (163/164)"],
+    ["Stopped on its own", "99.4%", "100%", "100%", "100%"],
+    ["Mean response tokens", "300", "167", "167", "167"],
   ],
   formatFailures: [
     ["Prose after the code block", "154", "0"],

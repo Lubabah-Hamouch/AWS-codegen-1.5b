@@ -1,12 +1,15 @@
 import { useMemo, useState } from "react";
 import { extractCode, suggestFilename, tokenize, unusedImports } from "@/lib/python";
 import { RunState, active, waking } from "@/lib/runMachine";
+import { servedCode } from "@/lib/typingFix";
 
 // onPlay: offered in the empty state, so a first look at the page has an obvious next step where the output goes.
 export function Listing({ run, onPlay }: { run: RunState; onPlay: () => void }) {
-  const code = useMemo(() => extractCode(run.text), [run.text]);
-  const toks = useMemo(() => tokenize(code), [code]);
   const finished = run.phase === "done" || run.phase === "stopped" || run.phase === "error";
+  // the model's code, plus the typing import fix once the run is complete (marked in the gutter and the footer)
+  const fix = useMemo(() => servedCode(extractCode(run.text), finished), [run.text, finished]);
+  const code = fix.code;
+  const toks = useMemo(() => tokenize(code), [code]);
   const notes = useMemo(() => (finished ? unusedImports(code) : []), [code, finished]);
   const file = useMemo(() => suggestFilename(code), [code]);
   const [copied, setCopied] = useState(false);
@@ -45,7 +48,7 @@ export function Listing({ run, onPlay }: { run: RunState; onPlay: () => void }) 
         {code ? (
           <>
             <pre className="gutter" aria-hidden="true">
-              {Array.from({ length: lines }, (_, i) => `${noteLines.has(i + 1) ? "◄" : " "}${i + 1}`).join("\n")}
+              {Array.from({ length: lines }, (_, i) => `${i + 1 === fix.line ? "+" : noteLines.has(i + 1) ? "◄" : " "}${i + 1}`).join("\n")}
             </pre>
             <pre className="src" aria-label="Generated code">
               <code>
@@ -73,6 +76,10 @@ export function Listing({ run, onPlay }: { run: RunState; onPlay: () => void }) 
         {notes.map((n) => (
           <span key={`${n.line}${n.text}`}><span className="tp">N · L{n.line}</span> {n.text} <span className="dim">(naive check; model output is unedited)</span></span>
         ))}
+        {fix.line !== null && (
+          <span><span className="sig2">+ L{fix.line}</span> import added after generation: {fix.added.join(", ")} used in a type
+            hint but not imported <span className="dim">(the one automatic fix; the rest is unedited model output)</span></span>
+        )}
         {run.phase === "stopped" && <span className="tp">stopped early: output is partial</span>}
       </div>
     </section>

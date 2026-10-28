@@ -26,12 +26,15 @@ runs and labels them as recordings. When it is live, each visitor gets up to 5 g
 
 HumanEval, 164 problems, greedy decoding:
 
-| | Base bf16 | Fine-tuned bf16 | **Shipped Q4_K_M** |
-|---|---|---|---|
-| HumanEval pass@1 | 65.2% | 70.1% | **64.0%** |
-| HumanEval+ pass@1 | 59.1% | 66.5% | **61.0%** |
-| Format-clean (one block, typed, documented) | 5.5% | 100% | **98.8%** |
-| Mean response tokens | 300 | 167 | **167** |
+| | Base bf16 | Fine-tuned bf16 | Shipped Q4_K_M, model output | **Shipped, as served** |
+|---|---|---|---|---|
+| HumanEval pass@1 | 65.2% | 70.1% | 64.0% | **64.6%** |
+| HumanEval+ pass@1 | 59.1% | 66.5% | 61.0% | **61.6%** |
+| Format-clean (one block, typed, documented) | 5.5% | 100% | 98.8% | **99.4%** |
+| Mean response tokens | 300 | 167 | 167 | **167** |
+
+"As served" adds one generation-time fix: a typing name used in a type hint but not imported gets its import added
+(and the playground marks the line). It is a shipped mitigation, not a retrain, and changes 1 answer of 164.
 
 The fine-tune's main win is **format**, not accuracy. The bf16 accuracy gains are not statistically significant on
 164 problems (paired McNemar p = 0.26 and 0.08), and 4-bit quantization gives most of them back. The full analysis,

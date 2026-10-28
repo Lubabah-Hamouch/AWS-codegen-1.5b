@@ -3,13 +3,16 @@ import { useEffect, useMemo, useState } from "react";
 import { suiteFor } from "@/data/checks";
 import { PLAIN } from "@/data/key";
 import { extractCode } from "@/lib/python";
+import { servedCode } from "@/lib/typingFix";
 import type { RunState } from "@/lib/runMachine";
 import { Outcome, RUN_LIMIT_MS, runBench, summarize } from "@/lib/testbench";
 
 type Phase = "idle" | "booting" | "running" | "done";
 
 export function TestBench({ run }: { run: RunState }) {
-  const code = useMemo(() => extractCode(run.text), [run.text]);
+  // the same code the listing shows: with the typing import fix once the run is complete
+  const code = useMemo(() => servedCode(extractCode(run.text), run.phase === "done" || run.phase === "stopped").code,
+    [run.text, run.phase]);
   // checks only for a complete answer to an unedited example prompt
   const suite = run.phase === "done" ? suiteFor(run.prompt) : null;
   const ready = (run.phase === "done" || run.phase === "stopped") && !!code;
