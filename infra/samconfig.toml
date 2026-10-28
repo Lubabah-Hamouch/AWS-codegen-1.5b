@@ -8,5 +8,5 @@ profile = "codegen-spike"
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = false
 resolve_s3 = true
-resolve_image_repos = true
+resolve_image_repos = false  # images are pushed by scripts/build_push.ps1 to the codegen-ecr repo
 fail_on_empty_changeset = false

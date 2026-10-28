@@ -5,6 +5,7 @@
 Leaves the kill switch OFF and limits restored only if every step ran; always prints a final state summary.
 """
 
+import atexit
 import json
 import subprocess
 import sys
@@ -32,6 +33,10 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 def seed(*args: str) -> None:
     subprocess.run([sys.executable, str(HERE / "seed_state.py"), *args], check=True, capture_output=True)
+
+
+# Whatever happens (failure, exception, Ctrl-C), leave the service parked with the kill switch ON.
+atexit.register(lambda: (seed("--kill", "on"), print("kill switch re-engaged (ON)")))
 
 
 def call(path: str, key: str | None = None, read_timeout: int = 60):

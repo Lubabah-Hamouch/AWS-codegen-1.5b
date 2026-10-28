@@ -14,7 +14,7 @@ $repo = aws ecr describe-repositories --repository-names codegen-backend --query
 $registry = $repo.Split('/')[0]
 aws ecr get-login-password @p | docker login --username AWS --password-stdin $registry | Out-Null
 $ctx = Join-Path $PSScriptRoot '..\..\backend'
-docker buildx build --platform linux/arm64 --provenance=false --sbom=false -f (Join-Path $ctx $Dockerfile) -t "${repo}:$Tag" --push $ctx
+docker buildx build --progress=plain --platform linux/arm64 --provenance=false --sbom=false -f (Join-Path $ctx $Dockerfile) -t "${repo}:$Tag" --push $ctx
 if ($LASTEXITCODE -ne 0) { throw 'build/push failed' }
 $digest = aws ecr describe-images --repository-name codegen-backend --image-ids imageTag=$Tag --query 'imageDetails[0].imageDigest' --output text @p
 "IMAGE_URI=${repo}@${digest}"
