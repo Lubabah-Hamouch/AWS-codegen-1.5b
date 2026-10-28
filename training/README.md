@@ -1,23 +1,99 @@
 # training
 
-Local QLoRA fine-tuning scripts, configs and the evaluation harness. Training runs on a local
-GPU; nothing here runs on AWS. Environment setup: [SETUP.md](SETUP.md).
+Everything from the source prompts to the shipped Q4_K_M GGUF and its HumanEval numbers. Runs on one local GPU (an
+8 GB card under WSL2); nothing here runs on AWS. Environment setup: [SETUP.md](SETUP.md).
 
-## Data pipeline (`data_pipeline/`)
+Data, checkpoints and results live outside the repo, under `~/work` (`PLAYGROUND_WORK` overrides the data location).
+The paths below are the defaults the scripts expect.
 
-Builds a format-conforming instruction set by sampling from the base model and keeping only
-responses that pass automatic format checks.
+## From raw data to 64.0%
 
-1. `prepare_prompts.py` loads the source prompts, drops empties and exact duplicates, and removes
-   near-duplicates of HumanEval, HumanEval+, MBPP (all splits) and MBPP+.
-2. `generate_vllm.py` (fast; separate venv, see SETUP.md) or `generate.py` (HF, slow) samples N responses per prompt from Qwen2.5-Coder-1.5B-Instruct under the target
-   format system prompt (`format_spec.py`).
-3. `filter_generations.py` applies the format checks in `format_checks.py` and runs the asserts
-   embedded in each prompt (`exec_check.py`), writing passed/failed files plus a per-reason report.
-   Generation samples only from prompts that have extractable asserts (`prompts_with_tests.jsonl`).
+Run from `training/` inside the training venv unless noted. Counts are from the reported run.
 
-`run_test_batch.sh` runs all three on a small batch. Data and outputs live outside the repo
-(`~/work/data`, override with `PLAYGROUND_WORK`).
+**1. Prompts** (`data_pipeline/`). Load the source instructions, drop empties and duplicates, and remove near-duplicates
+of HumanEval, HumanEval+, MBPP and MBPP+. Writes `~/work/data/prompts.jsonl`, `prompts_with_tests.jsonl` (prompts with
+extractable asserts) and `dedupe_report.json`. 50,661 rows → 14,042 with tests.
+
+```bash
+python data_pipeline/prepare_prompts.py
+```
+
+**2. Generate.** Sample 4 responses per prompt from the base model under the target-format system prompt
+(`format_spec.py`). The vLLM path runs in its own venv (SETUP.md); `generate.py` is the slower Hugging Face fallback with
+the same output.
+
+```bash
+~/venvs/vllm/bin/python data_pipeline/generate_vllm.py --out ~/work/data/gen.jsonl --limit 6000 -n 4 --eager
+```
+
+**3. Filter.** Keep only samples that pass the format checks (`format_checks.py`) and the prompt's own asserts, run
+sandboxed (`exec_check.py`). Writes `gen.passed.jsonl`, `gen.failed.jsonl` and `gen.report.json`. 6,000 × 4 → 12,963 passed.
+
+```bash
+python data_pipeline/filter_generations.py ~/work/data/gen.jsonl
+```
+
+**4. Build the SFT set.** Keep one passing response per prompt, using the plain instruction with no system prompt so the
+format is learned into the weights. 4,535 examples.
+
+```bash
+python data_pipeline/build_sft.py ~/work/data/gen.passed.jsonl --out ~/work/data/sft_train.jsonl
+```
+
+**5. Contamination check.** Compare the actual training examples (instructions and generated code) against the
+benchmarks' problems and reference solutions. Writes `~/work/eval/contamination.json`; findings are in
+[docs/eval_report.md](../docs/eval_report.md).
+
+```bash
+python eval/contamination_check.py
+```
+
+**6. Train.** QLoRA on the NF4-quantised base: r 16, α 32, lr 2e-4 cosine, effective batch 16, loss on the assistant
+response and its closing `<|im_end|>` only (`sft_data.py`). It checkpoints at every eval point; the reported model is
+`checkpoint-250`, the lowest validation loss (0.1299).
+
+```bash
+python train.py --out ~/work/runs/v1                    # add --max-steps 30 for a smoke run
+```
+
+**7. Evaluate the adapter.** HumanEval and HumanEval+ pass@1 (greedy) plus format compliance. Each config is generated
+once, then executed against both test sets.
+
+```bash
+python eval/humaneval_eval.py gen --config base_bf16 && python eval/humaneval_eval.py score --config base_bf16
+python eval/humaneval_eval.py gen --config ckpt250   && python eval/humaneval_eval.py score --config ckpt250
+```
+
+**8. Merge and export** (`export/`). Merge the adapter into the bf16 base (the script checks logits match), then convert
+and quantise with llama.cpp b11856.
+
+```bash
+python export/merge_adapter.py --adapter ~/work/runs/v1/checkpoints/checkpoint-250 --out ~/work/export/merged_ckpt250
+python <llama.cpp>/convert_hf_to_gguf.py ~/work/export/merged_ckpt250 --outtype f16 --outfile ckpt250-f16.gguf
+<llama.cpp>/llama-quantize ckpt250-f16.gguf ckpt250-Q4_K_M.gguf Q4_K_M
+```
+
+**9. Evaluate what ships.** Score the merged bf16 model and the GGUF served by `llama-server` (the harness looks for it
+under `~/work/llamacpp/bin`), then print the comparison tables with paired McNemar tests.
+
+```bash
+python eval/humaneval_eval.py gen --config merged_bf16 && python eval/humaneval_eval.py score --config merged_bf16
+python eval/humaneval_eval.py gen --config gguf_q4km --gguf ckpt250-Q4_K_M.gguf && python eval/humaneval_eval.py score --config gguf_q4km
+python eval/report_tables.py base_bf16 merged_bf16 gguf_q4km
+```
+
+The Q4_K_M GGUF scores **64.0%** HumanEval and **61.0%** HumanEval+, with 99.4% format-clean output. The full results,
+including why accuracy did not really improve, are in [docs/eval_report.md](../docs/eval_report.md); the model's specs
+are in [docs/model_card.md](../docs/model_card.md).
+
+## Tests
+
+```bash
+python -m pytest training/tests -q
+```
+
+These cover the format checks, the sandboxed assert runner, the HumanEval program assembly, and the label masking.
+The masking test needs `transformers` and skips without it; one case also needs the built dataset.
 
 ## Attribution
 

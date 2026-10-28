@@ -12,7 +12,8 @@ llama.cpp on CPU. It is a format adaptation, not a capability upgrade.
 | f16 GGUF | `~/work/export/qwen2.5-coder-1.5b-instruct-ckpt250-f16.gguf` | 3.09 GB |
 | **Q4_K_M GGUF** | `~/work/export/qwen2.5-coder-1.5b-instruct-ckpt250-Q4_K_M.gguf` | 986,048,160 bytes |
 
-Model files are gitignored (`*.gguf`, `/model-artifacts/*`) and are intended for S3. Built with llama.cpp
+Model files are gitignored (`*.gguf`, `/model-artifacts/*`) and not published: the Q4_K_M GGUF exists only inside the
+backend container image (private ECR). Built with llama.cpp
 release b11856. Chat template (ChatML) is embedded in the GGUF; use `--jinja` / the chat endpoint.
 
 ## Base model and licences

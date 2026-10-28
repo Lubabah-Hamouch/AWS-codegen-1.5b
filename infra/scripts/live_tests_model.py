@@ -1,4 +1,4 @@
-"""Live guardrail + SSE tests against the deployed real model (POST /generate). Same coverage as live_tests.py.
+"""Live guardrail + SSE tests against the deployed real model (POST /generate).
 
     python live_tests_model.py URL [function-name]
 

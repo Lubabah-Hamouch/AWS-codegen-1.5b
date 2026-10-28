@@ -96,7 +96,8 @@ python infra\scripts\live_tests_hardening.py <FunctionUrl>                 # IP 
   (3008 MB, `LLAMA_THREADS=2`, no `LLAMA_EXTRA`) or redeploy.
 
 Stacks: `codegen-persistent` (DynamoDB, retained), `codegen-ecr` (image repo, keeps the newest 2), `codegen-backend`
-(function, URL, daily warm-up rule, alarm, SNS topic, breaker). Tear down with `infra\teardown.ps1` (backend only) or `-All`.
+(function, URL, daily warm-up rule, alarm, SNS topic, breaker), `codegen-frontend` (site bucket, CloudFront). Tear down with
+`infra\teardown.ps1` (backend only) or `-All` (everything; empties the site bucket first, keeps the retained table).
 
 Function URL: `https://sug6pvql5qkkk3tm7udviuyoc40jwvys.lambda-url.eu-north-1.on.aws/` (POST `/generate`, GET `/health`).
 

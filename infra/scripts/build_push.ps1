@@ -1,12 +1,12 @@
 <#
 Build the arm64 image with buildx and push it to ECR; prints the image URI (by digest) for `sam deploy`.
 
-  .\build_push.ps1 -Dockerfile Dockerfile.spike -Tag spike-1
+  .\build_push.ps1 -Tag model-N            (builds backend\Dockerfile; -Dockerfile picks another file in backend\)
 
 Why not `sam build`: its legacy builder resolves multi-arch base layers (the Web Adapter) to the host platform and fails
 for arm64. buildx with --provenance=false also yields a single-manifest image, which Lambda requires.
 #>
-param([string]$Dockerfile = 'Dockerfile.spike', [Parameter(Mandatory)][string]$Tag)
+param([string]$Dockerfile = 'Dockerfile', [Parameter(Mandatory)][string]$Tag)
 $ErrorActionPreference = 'Stop'
 $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
 $p = '--profile', 'codegen-spike', '--region', 'eu-north-1'

@@ -22,7 +22,7 @@ RUN echo "${LLAMA_SHA256}  /tmp/llama.tar.gz" | sha256sum -c - \
  && mkdir /src && tar -xzf /tmp/llama.tar.gz -C /src --strip-components=1
 WORKDIR /src
 # GGML_NATIVE=OFF: never bake in the build host's instruction set. Lambda arm64 is Graviton2 (Neoverse N1):
-# armv8.2-a + dotprod + fp16, no i8mm/SVE. The amd64 branch exists only for local spikes.
+# armv8.2-a + dotprod + fp16, no i8mm/SVE. The amd64 branch exists only for local testing.
 RUN if [ "$TARGETARCH" = "arm64" ]; then \
       ARCH="-DCMAKE_SYSTEM_NAME=Linux -DCMAKE_SYSTEM_PROCESSOR=aarch64 -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++ -DGGML_CPU_ARM_ARCH=armv8.2-a+dotprod+fp16"; \
       OBJDUMP=aarch64-linux-gnu-objdump; READELF=aarch64-linux-gnu-readelf; \
