@@ -27,7 +27,7 @@ infra\scripts\killswitch.ps1 on                     # 4. afterwards: both layers
 - If the page says "Paused by circuit breaker", the breaker tripped on an invocation flood. Find out why (CloudWatch
   `Invocations` for `codegen-backend`) before turning it back on.
 
-Account `<redacted-account-id>`, region **eu-north-1** (Stockholm). Profile `codegen-spike`. The account is a "project account"
+Account `<ACCOUNT_ID>`, region **eu-north-1** (Stockholm). Profile `codegen-spike`. The account is a "project account"
 in AWS's new sign-up experience: AWS manages its Organization SCPs, and everything outside the project region is denied.
 
 ## Emergency stop (read this first)
@@ -75,7 +75,7 @@ unchanged, so it was forgeable (measured).
 infra\scripts\build_push.ps1 -Dockerfile Dockerfile -Tag model-N          # arm64 image -> ECR (prints IMAGE_URI)
 cd infra
 sam deploy -t backend.yaml --stack-name codegen-backend `
-  --image-repository <redacted-account-id>.dkr.ecr.eu-north-1.amazonaws.com/codegen-backend `
+  --image-repository <ACCOUNT_ID>.dkr.ecr.eu-north-1.amazonaws.com/codegen-backend `
   --parameter-overrides "ImageUri=<IMAGE_URI> SiteOrigin=https://d2js86b0xg0ozs.cloudfront.net StatusBucket=codegen-frontend-sitebucket-xwl33y2kvcnw"
 curl.exe -m 150 <FunctionUrl>/health                                       # WARM-UP after every new image
 python infra\scripts\live_tests_model.py <FunctionUrl>                     # kill switch, caps, keys, SSE, out-of-band kill
