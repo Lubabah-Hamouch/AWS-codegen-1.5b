@@ -231,7 +231,13 @@ Not in CI: GPU training, real-model evals, the Lambda image and stacks, and the 
   `--breaker` trips the circuit breaker with real traffic: ~750 signed `GET /health` inside one aligned 5-minute period,
   then waits for the alarm. The breaker writes status.json "circuit breaker" (public, for a few minutes) until the
   script restores "paused". Run 2026-10-28: 750 calls in 39 s, ALARM 107 s later, kill flag set 1 s after that; quota
-  checks 9/9. Cost: well inside the free tier. The alarm returns to OK on its own about 5 minutes later; the breaker
+  checks 9/9. Cost: well inside the free tier.
+- The real UI against the real backend, still without opening the URL: `seed_state.py --kill off --no-status`, then
+  `python infra/scripts/signing_proxy.py` (127.0.0.1 only; signs requests with the operator's credentials) and
+  `BASE_URL=<site or local build> PRIVATE_PROXY=http://127.0.0.1:8787 npx playwright test tests/e2e/private-live.spec.ts`;
+  afterwards `seed_state.py --kill on`. The proxy hands the answer over in one piece, so the page's first-token time
+  and rate trace are not meaningful in this test (the server-measured numbers are). Run 2026-10-29: Try it live sent
+  one request, 106 tokens, clean EOS, 5/5 checks. The alarm returns to OK on its own about 5 minutes later; the breaker
   only acts on a new transition into ALARM, so check it is OK before relying on it again.
 
 - `frontend`: `npm test`, `npx playwright test`, `node scripts/contrast.mjs` (see "Deploy the frontend").
