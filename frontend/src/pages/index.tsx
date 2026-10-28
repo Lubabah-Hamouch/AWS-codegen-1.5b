@@ -4,6 +4,7 @@ import { BudgetPanel, EvalPanel, RunLog } from "@/components/AsidePanels";
 import { Listing } from "@/components/Listing";
 import { Footer, Masthead } from "@/components/Masthead";
 import { Readouts } from "@/components/Readouts";
+import { TestBench } from "@/components/TestBench";
 import { Mode, SignalPath } from "@/components/SignalPath";
 import { EXAMPLES } from "@/data/facts";
 import { ApiError, generate } from "@/lib/api";
@@ -198,7 +199,10 @@ export default function Playground() {
         </svg>
 
         <div className="bottom">
-          <Listing run={run} />
+          <div className="leftcol">
+            <Listing run={run} />
+            <TestBench run={run} />
+          </div>
           <aside className="aside" aria-label="Evaluation, budget and run log">
             <EvalPanel />
             <BudgetPanel />

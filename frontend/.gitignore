@@ -8,3 +8,6 @@ next-env.d.ts
 # public config (the Function URL is not a secret); the repo root ignores .env*
 !.env.production
 !.env.development
+/public/pyodide
+# written by `next dev` on every start (agent instructions), not project content
+/AGENTS.md

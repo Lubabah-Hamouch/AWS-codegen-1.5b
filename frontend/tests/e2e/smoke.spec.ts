@@ -26,7 +26,7 @@ test("paused backend: banner, replay plays a real recorded run, no CSP or consol
 test("theme picker applies and persists a preset", async ({ page }, info) => {
   await page.goto("/");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "soldermask");
-  await page.getByRole("button", { name: /Theme · Soldermask/ }).click();
+  await page.getByRole("button", { name: "Theme: Soldermask" }).click();
   await page.getByRole("menuitemradio", { name: /Datasheet/ }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "datasheet");
   await page.reload();

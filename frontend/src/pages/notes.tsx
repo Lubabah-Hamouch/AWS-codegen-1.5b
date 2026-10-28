@@ -2,7 +2,9 @@ import Head from "next/head";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Footer, Masthead } from "@/components/Masthead";
-import { BUDGET, EVAL, HOST, MODEL, PERF, TRAINING } from "@/data/facts";
+import { BUDGET, EVAL, HOST, MODEL, PERF, TRAINING, EXAMPLES } from "@/data/facts";
+import { suiteFor } from "@/data/checks";
+import { RUN_LIMIT_MS } from "@/lib/testbench";
 
 const SECTIONS = [
   ["overview", "Overview"],
@@ -14,6 +16,7 @@ const SECTIONS = [
   ["training", "Training"],
   ["limits", "Limitations"],
   ["replay", "Replay mode"],
+  ["bench", "Test bench"],
 ] as const;
 
 function Sec({ id, title, rev, children }: { id: string; title: string; rev?: string; children: ReactNode }) {
@@ -230,6 +233,30 @@ export default function Notes() {
                 real response from the deployed model (same image, same prompt template, greedy decoding), captured with the arrival time of
                 every token and replayed with that timing. Replays are labelled wherever they appear, make no backend call, and use no quota.
                 They are recorded by <code>frontend/scripts/record_replays.py</code>.
+              </p>
+            </Sec>
+
+            <Sec id="bench" title="Test bench" rev="U6 · in-browser · Pyodide">
+              <p>
+                U6 runs the generated code in your browser: CPython compiled to WebAssembly (Pyodide), inside a Web Worker
+                that is created for the run and terminated afterwards. Nothing is sent to a server and nothing loads until
+                you press the button (the runtime is a ~6 MB download, served from this site).
+              </p>
+              <ul>
+                <li><strong>Example prompts get hand-written checks.</strong> Each of the five example prompts, unedited, has 4–5 checks written from the prompt&apos;s wording, not from any model output. They test that one spec; they are not a measure of the model in general (that is HumanEval, §4).</li>
+                <li><strong>Anything else gets a behavioural report only:</strong> whether the code parses, whether it raises while loading, and which functions it defines. Never pass/fail.</li>
+                <li><strong>Containment.</strong> Pyodide&apos;s filesystem is in memory; network access is limited by this site&apos;s CSP to the site and its API; a run still going after {RUN_LIMIT_MS / 1000} s is killed with its worker. The only CSP change it needed is <code>&apos;wasm-unsafe-eval&apos;</code> (compiling WebAssembly; JavaScript <code>eval</code> stays blocked).</li>
+              </ul>
+              <Table
+                caption="Check suites, and how the recorded replays (2026-10-28) score against them"
+                head={["example prompt", "checks", "assumes", "recorded replay"]}
+                rows={EXAMPLES.map((p, i) => [p, suiteFor(p)!.checks.length, suiteFor(p)!.convention ?? "—",
+                  ["5/5", "5/5", "2/5: mutates the input tuples (TypeError)", "5/5", "4/4"][i]])}
+                num={[1]}
+              />
+              <p className="dim">
+                The failure is the model&apos;s: asked for a list of (start, end) tuples, its merge_intervals assigns into a
+                tuple. The checks are not adjusted to make it pass.
               </p>
               <p><Link href="/">← back to the playground</Link></p>
             </Sec>

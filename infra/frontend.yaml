@@ -70,7 +70,7 @@ Resources:
           ContentSecurityPolicy:
             Override: true
             ContentSecurityPolicy: !Sub
-              - "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ${Origin}; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
+              - "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' ${Origin}; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'"
               - Origin: !Select [0, !Split ['/', !Select [1, !Split ['://', !Ref FunctionUrl]]]]
           ContentTypeOptions: {Override: true}
           FrameOptions: {FrameOption: DENY, Override: true}

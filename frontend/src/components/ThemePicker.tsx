@@ -71,8 +71,13 @@ export function ThemePicker() {
   return (
     <div className="theme-wrap">
       <button ref={btn} type="button" className="theme-btn silk" aria-haspopup="menu" aria-expanded={open}
-        onClick={() => setOpen((o) => !o)} title="Theme (Shift+T cycles)">
-        Theme · {cur.label} <Swatch colors={cur.swatch} /> <span className="dim" aria-hidden="true">▾</span>
+        onClick={() => setOpen((o) => !o)} title="Theme (Shift+T cycles)" aria-label={`Theme: ${cur.label}`}>
+        <Swatch colors={cur.swatch} />
+        {/* all names share one grid cell: the box is always as wide as the longest, so the bar never reflows */}
+        <span className="theme-name" aria-hidden="true">
+          {THEMES.map((t) => <span key={t.id} className={t.id === theme ? "" : "ghost"}>{t.label}</span>)}
+        </span>
+        <span className="dim" aria-hidden="true">▾</span>
       </button>
       {open && (
         <div ref={menu} className="theme-menu" role="menu" aria-label="Theme">

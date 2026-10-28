@@ -118,7 +118,7 @@ Function URL: `https://sug6pvql5qkkk3tm7udviuyoc40jwvys.lambda-url.eu-north-1.on
 
 ```powershell
 frontend\scripts\deploy.ps1          # next build (webpack) -> s3 sync -> CloudFront invalidation
-cd frontend; npx playwright test      # 22 browser checks against the deployed site (replay mode, themes, a11y)
+cd frontend; npx playwright test      # browser checks against the deployed site (replay, themes, a11y, test bench)
 ```
 
 - Stack `codegen-frontend` (`infra/frontend.yaml`): private S3 bucket, CloudFront with origin access control, a viewer-request
@@ -128,9 +128,31 @@ cd frontend; npx playwright test      # 22 browser checks against the deployed s
 - `_next/` assets are cached for a year (hashed names); HTML and replays for 60 s, and each deploy invalidates `/*`.
 - The API URL is in `frontend/.env.production` / `.env.development` (public by design). The demo API key is never used by
   the frontend.
-- Checks: `npm test` (19 unit), `node scripts/contrast.mjs` (WCAG contrast of all four themes),
+- Checks: `npm test` (25 unit), `node scripts/contrast.mjs` (WCAG contrast of all four themes),
   `LIVE=1 npx playwright test tests/e2e/live.spec.ts` (one real cross-origin run; kill switch must be OFF).
 - Local dev: `cd frontend; npm run dev` -> http://localhost:3000 (no status.json locally, so it starts in live mode).
+- Local check of the real build under the real CSP: `npm run build`, then `python scripts/serve_static.py` (serves `out/`
+  like CloudFront: same CSP and headers, a parked status.json) and `BASE_URL=http://127.0.0.1:3999 npx playwright test
+  --workers=1`. One worker: the single-process server cannot feed several browsers downloading the Python runtime at once.
+
+## Test bench (U6: running the generated code)
+
+- Runs entirely in the visitor's browser: Pyodide (CPython on WebAssembly, pinned in `frontend/package.json`) in a Web
+  Worker created per run and terminated afterwards (`public/testbench.worker.mjs`, `src/lib/testbench.ts`). No backend,
+  no AWS cost, no change to the backend's risk profile.
+- Loaded on demand only: nothing under `/pyodide/` is requested until someone presses Run checks / Run code (a test
+  asserts this). The runtime (~13.5 MB on disk, ~6 MB over the wire with CloudFront compression) is copied from `node_modules/pyodide` into `public/pyodide/` before every dev/build
+  (`scripts/copy-pyodide.mjs`; the copy is gitignored).
+- Limits: 5 s per run (then the worker is terminated), 90 s to boot on first use. Network from inside it is whatever the
+  CSP allows (the site and the Function URL).
+- CSP: the only addition is `'wasm-unsafe-eval'` in `script-src` (WebAssembly compilation; JS `eval` stays blocked).
+- `deploy.ps1` uploads `.mjs` as `text/javascript` and `.wasm` as `application/wasm` explicitly: the site sends `nosniff`,
+  so a wrong type would stop the worker from loading.
+- Checks: hand-written suites for the five example prompts, exact text only, in `src/data/checks.ts`. Anything else
+  (custom or edited prompt, stopped run) gets a behavioural report, never pass/fail. Keep suites in step with
+  `EXAMPLES` in `src/data/facts.ts`; a unit test fails if the counts differ.
+- After re-recording replays, check them against the suites and update the "recorded replay" column in the /notes Test
+  bench table (it states the current results, including the merge_intervals failure).
 
 ## Record new replays
 

@@ -69,7 +69,7 @@ test("keyboard: skip link, every stop has a visible focus ring, replay runs with
 test("keyboard: theme menu opens, arrows move, Enter selects, Escape returns focus", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop");
   await settled(page);
-  const btn = page.getByRole("button", { name: /Theme · / });
+  const btn = page.getByRole("button", { name: /^Theme: / });
   await btn.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("menuitemradio", { name: /Soldermask/ })).toBeFocused();
