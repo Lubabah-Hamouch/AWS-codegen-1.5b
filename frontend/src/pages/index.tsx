@@ -92,7 +92,10 @@ export default function Playground() {
       record({ ...base, tokens: null, tok_s: null, ttft_ms: ttft, outcome: err.code });
       if (err.code === "daily_limit") { saveRemaining(0); setRemaining(0); }
       if (ui.retryAfterS) setRetryAt(Date.now() + ui.retryAfterS * 1000);
-      if (ui.paused) setStatus((s) => ({ ...s, live: false, note: s.note ?? "unreachable" }));
+      if (ui.paused) {
+        setStatus((s) => ({ ...s, live: false, note: s.note ?? (err.code === "disabled" ? "paused" : "unreachable") }));
+        setMode("replay");
+      }
     } finally {
       clearInterval(tick);
     }
