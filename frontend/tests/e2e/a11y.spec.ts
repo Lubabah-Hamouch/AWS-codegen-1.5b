@@ -21,6 +21,7 @@ for (const theme of THEMES) {
         await page.getByText("Before / after: one real answer from the evaluation").click();
         await page.getByText("The prompt", { exact: true }).click();
         await expect(page.getByLabel("Base model answer")).toBeVisible();
+        await page.getByText("How to read the schematic").click();
       }
       const r = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
       expect(r.violations.map((v) => `${v.id}: ${v.nodes.length} × ${v.nodes[0]?.target}`)).toEqual([]);

@@ -61,6 +61,8 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .tblock tr:first-child td { border-top: 0; } .tblock tr:last-child td { border-bottom: 0; }
 .tblock td:first-child { border-left: 0; } .tblock td:last-child { border-right: 0; }
 .tblock .k { display: block; font-size: 10px; color: var(--dim); }
+/* phones: the title block is decoration (its facts are on the datasheet); the first screen goes to the intro */
+@media (max-width: 640px) { .tblock { display: none; } }
 
 /* ---------- theme picker ---------- */
 .theme-wrap { position: relative; display: flex; }
@@ -139,6 +141,18 @@ kbd { font-family: inherit; border: 1px solid var(--line); padding: 0 4px; font-
   .compare-cols { padding: 0 14px 14px; }
 }
 .anchor { scroll-margin-top: 8px; height: 0; margin-top: -12px; }
+
+/* ---------- schematic key + block subtitles ---------- */
+.key { border: 1px solid var(--line); }
+.key > summary { cursor: pointer; padding: 0 14px; min-height: 40px; display: flex; align-items: center; gap: 8px; font-size: 12px; list-style: none; }
+.key > summary::-webkit-details-marker { display: none; }
+.key > summary::before { content: "▸"; color: var(--cu); }
+.key[open] > summary::before { content: "▾"; }
+.key > summary:hover { color: var(--au); background: var(--act); }
+.key dl { margin: 0; padding: 4px 14px 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px 24px; font-size: 12px; }
+.key dt { color: var(--cu); font-weight: 600; }
+.key dd { margin: 0; color: var(--ink); }
+.blk-sub { margin: 0 0 4px; font-size: 12px; line-height: 1.4; color: var(--dim); }
 
 /* ---------- banner ---------- */
 .banner { border: 1.5px solid var(--tp); border-left-width: 6px; padding: 8px 14px; display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; }
@@ -279,3 +293,5 @@ kbd { font-family: inherit; border: 1px solid var(--line); padding: 0 4px; font-
 .bar .fill.ship { background: var(--au); }
 .bar .v { text-align: right; font-variant-numeric: tabular-nums; }
 @media (max-width: 640px) { .bar { grid-template-columns: 110px minmax(0, 1fr) 54px; } }
+.empty-idle { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 60ch; }
+.empty-idle p { margin: 0; }

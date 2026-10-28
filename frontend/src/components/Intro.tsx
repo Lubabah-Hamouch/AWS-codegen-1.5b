@@ -29,8 +29,8 @@ export function Intro({ status, playing, onWatch }: Props) {
           <li><span className="n silk">3</span>Run checks on the code, right in your browser</li>
         </ol>
         <div className="runrow">
-          <button type="button" className="btn-run silk" onClick={onWatch} disabled={playing}>
-            {playing ? "Playing…" : "Watch a recorded run ▸"}
+          <button type="button" className="btn-run silk" onClick={onWatch}>
+            {playing ? "Playing · see output ↓" : "Watch a recorded run ▸"}
           </button>
           <Link href="/notes/">How it was built →</Link>
         </div>

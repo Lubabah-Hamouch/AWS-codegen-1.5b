@@ -142,6 +142,9 @@ against the deployed site, from a clean browser. `cd frontend; npx playwright te
   run, never with reduced motion; marked by `cg.visited` in localStorage). The e2e specs import `tests/e2e/fixtures.ts`,
   which marks every test as a returning visitor; `intro.spec.ts` tests the first visit itself.
 - The before/after comparison (`src/data/compare.ts`) is one real pair from the HumanEval records, copied verbatim.
+- Plain-language block subtitles and the "How to read the schematic" key both come from `src/data/key.ts`.
+- Link previews: Open Graph / Twitter tags in `_document.tsx`, image `public/og.png` (1200x630, a screenshot of the
+  intro). After changing the intro: build, `python scripts/serve_static.py`, `node scripts/og-image.mjs`, rebuild.
 - Checks: `npm test` (27 unit), `node scripts/contrast.mjs` (WCAG contrast of all four themes),
   `LIVE=1 npx playwright test tests/e2e/live.spec.ts` (one real cross-origin run; kill switch must be OFF).
 - Local dev: `cd frontend; npm run dev` -> http://localhost:3000 (no status.json locally, so it starts in live mode).

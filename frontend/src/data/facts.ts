@@ -1,6 +1,9 @@
 // Measured numbers, one place. Sources: docs/eval_report.md, docs/model_card.md, docs/backend_capacity.md
 // (all measured 2026-10-28). Anything shown as "bench" in the UI comes from here, not from the current run.
 
+// Public address of the site (CloudFront); link previews need absolute URLs.
+export const SITE = "https://d2js86b0xg0ozs.cloudfront.net";
+
 export const MODEL = {
   name: "qwen2.5-coder-1.5b-ft",
   base: "Qwen2.5-Coder-1.5B-Instruct",

@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { extractCode, suggestFilename, tokenize, unusedImports } from "@/lib/python";
 import { RunState, active } from "@/lib/runMachine";
 
-export function Listing({ run }: { run: RunState }) {
+// onPlay: offered in the empty state, so a first look at the page has an obvious next step where the output goes.
+export function Listing({ run, onPlay }: { run: RunState; onPlay: () => void }) {
   const code = useMemo(() => extractCode(run.text), [run.text]);
   const toks = useMemo(() => tokenize(code), [code]);
   const finished = run.phase === "done" || run.phase === "stopped" || run.phase === "error";
@@ -55,7 +56,12 @@ export function Listing({ run }: { run: RunState }) {
           </>
         ) : (
           <div className="empty">
-            {run.phase === "connecting" ? "waiting for first token…" : run.phase === "idle" ? "Output appears here, streamed token by token." : "No code in the response."}
+            {run.phase === "idle" ? (
+              <div className="empty-idle">
+                <p>Nothing generated yet. The code appears here token by token, at the speed the model wrote it on Lambda.</p>
+                <button type="button" className="btn-ghost silk" onClick={onPlay}>Play a recorded run ▸</button>
+              </div>
+            ) : run.phase === "connecting" ? "waiting for first token…" : "No code in the response."}
           </div>
         )}
       </div>

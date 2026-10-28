@@ -6,13 +6,15 @@ The playground site: a static Next.js export (pages router, built with webpack) 
 |---|---|
 | `src/pages/index.tsx` | The playground: prompt in, guard and model readouts, streamed listing, test bench |
 | `src/pages/notes.tsx` | `/notes`, the datasheet: API, runtime, evaluation, cost, guardrails, training, limitations, test bench |
-| `src/components/` | The panels (masthead, signal path, readouts, listing, test bench, side panels, theme picker) |
+| `src/components/` | The panels (masthead, intro, schematic key, signal path, readouts, listing, test bench, side panels, theme picker) |
 | `src/lib/` | SSE parser, API client and error mapping, run state machine, replay playback, status.json, themes, test bench runner |
 | `src/data/facts.ts` | Every measured number shown on the site, with its source doc |
 | `src/data/checks.ts` | Hand-written check suites for the five example prompts |
+| `src/data/compare.ts` | The before/after pair: one real base and shipped answer from the HumanEval records, verbatim |
+| `src/data/key.ts` | Plain-language block subtitles and the schematic key |
 | `public/replays/` | Five recorded real runs, played back while the backend is paused |
 | `public/testbench.worker.mjs` | Web Worker that runs generated code in Pyodide (CPython on WebAssembly) |
-| `scripts/` | `deploy.ps1`, `copy-pyodide.mjs` (runs before dev/build), `check-csp.mjs` (no inline scripts in the export), `record_replays.py`, `contrast.mjs`, `serve_static.py` |
+| `scripts/` | `deploy.ps1`, `copy-pyodide.mjs` (runs before dev/build), `check-csp.mjs` (no inline scripts in the export), `og-image.mjs` (the link-preview image), `record_replays.py`, `contrast.mjs`, `serve_static.py` |
 
 ## Run
 

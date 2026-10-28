@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { BUDGET, EXAMPLES, HOST, MODEL, PERF } from "@/data/facts";
+import { PLAIN } from "@/data/key";
 import { MAX_PROMPT_CHARS } from "@/lib/api";
 import type { ReplayIndexEntry } from "@/lib/replay";
 import { RunState, active } from "@/lib/runMachine";
@@ -60,6 +61,7 @@ export function SignalPath(p: Props) {
     <div className="path" id="controls" tabIndex={-1}>
       <section className="blk u1" aria-labelledby="u1">
         <h2 id="u1" className="silk"><span>U1 · Spec in</span><span className="au">J1</span></h2>
+        <p className="blk-sub">{PLAIN.u1}</p>
         <div className="srcsw silk" role="group" aria-label="Source">
           <button type="button" aria-pressed={p.mode === "live"} onClick={() => p.onMode("live")} disabled={!p.liveAllowed || running}
             title={p.liveAllowed ? "Generate live on Lambda" : "Live generation is paused"}>Live</button>
@@ -114,6 +116,7 @@ export function SignalPath(p: Props) {
 
       <section className="blk u2" aria-labelledby="u2">
         <h2 id="u2" className="silk"><span>U2 · Guard</span>{p.mode === "replay" && <span className="dim tag">bypassed</span>}</h2>
+        <p className="blk-sub">{PLAIN.u2}</p>
         <div className="kv"><span>KILL</span><span className={killLabel === "engaged" ? "tp" : ""}>{killLabel}</span></div>
         <div className="kv"><span>SLOT</span><span className="au">{slot}</span></div>
         <div className="kv"><span>QUOTA·IP</span><span className="au">{quota}</span></div>
@@ -126,6 +129,7 @@ export function SignalPath(p: Props) {
 
       <section className={`blk u3${running ? " active" : ""}`} aria-labelledby="u3">
         <h2 id="u3" className="silk"><span>U3 · Model</span><span className={running ? "au" : "dim"}>{running ? (streaming ? "decode" : "prefill") : "idle"}</span></h2>
+        <p className="blk-sub">{PLAIN.u3}</p>
         <div className="kv"><span>WEIGHTS</span><span>{MODEL.quant} · {MODEL.sizeMb} MB</span></div>
         <div className="kv"><span>THREADS</span><span>{HOST.threads} · greedy · seed 42</span></div>
         <div className="kv"><span>RSS</span><span>{HOST.rssPeakMb} / {HOST.memoryMb} MB <span className="dim tag">bench</span></span></div>
@@ -137,6 +141,7 @@ export function SignalPath(p: Props) {
 
       <section className="blk u4" aria-labelledby="u4">
         <h2 id="u4" className="silk"><span>U4 · Stream</span>{run.source === "replay" && run.phase !== "idle" && <span className="sig2 tag">replay</span>}</h2>
+        <p className="blk-sub">{PLAIN.u4}</p>
         <div className="kv"><span>events</span><span>{run.tokenTimes.length}</span></div>
         <div className="kv"><span>done</span><span>{run.done?.finish_reason ?? (run.phase === "error" ? "error" : "—")}</span></div>
         <div className="kv"><span>wall</span><span>{run.phase === "idle" ? "—" : `${(run.elapsedMs / 1000).toFixed(1)} s`}</span></div>

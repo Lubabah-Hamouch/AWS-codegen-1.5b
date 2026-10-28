@@ -5,6 +5,7 @@ import { Listing } from "@/components/Listing";
 import { Intro } from "@/components/Intro";
 import { Footer, Masthead } from "@/components/Masthead";
 import { Readouts } from "@/components/Readouts";
+import { SchematicKey } from "@/components/SchematicKey";
 import { TestBench } from "@/components/TestBench";
 import { Mode, SignalPath } from "@/components/SignalPath";
 import { EXAMPLES } from "@/data/facts";
@@ -146,15 +147,24 @@ export default function Playground() {
     runReplay();
   }, [mode, status.live, replayId, run.phase, runReplay]);
 
+  // Bring the output into view if it is below the fold: the readouts on the wide layout, the listing once the
+  // layout stacks (there the readouts are far from the code that is moving).
   const outRef = useRef<HTMLDivElement>(null);
-  const watch = () => {
-    setMode("replay");
-    runReplay();
-    const r = outRef.current?.getBoundingClientRect();
-    if (r && r.top > window.innerHeight) {
+  const showOutput = () => {
+    const stacked = window.matchMedia("(max-width: 1000px)").matches;
+    const el = stacked ? document.querySelector<HTMLElement>(".listing") : outRef.current;
+    const r = el?.getBoundingClientRect();
+    if (el && r && (r.top > window.innerHeight - 80 || r.bottom < 0)) {
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      outRef.current!.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+      el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
     }
+  };
+  const watch = () => {
+    if (!active(run)) {
+      setMode("replay");
+      runReplay();
+    }
+    showOutput();
   };
 
   const onRun = () => (mode === "live" ? runLive() : runReplay());
@@ -164,7 +174,7 @@ export default function Playground() {
   return (
     <>
       <Head>
-        <title>Codegen-1.5B · signal path</title>
+        <title>Codegen-1.5B · a fine-tuned code model</title>
       </Head>
       <main className="page">
         <Masthead page="schematic" />
@@ -196,6 +206,7 @@ export default function Playground() {
           </div>
         )}
 
+        <SchematicKey />
         <div ref={outRef} className="anchor" aria-hidden="true" />
         <Readouts run={run} />
 
@@ -214,7 +225,7 @@ export default function Playground() {
 
         <div className="bottom">
           <div className="leftcol">
-            <Listing run={run} />
+            <Listing run={run} onPlay={watch} />
             <TestBench run={run} />
           </div>
           <aside className="aside" aria-label="Evaluation, budget and run log">

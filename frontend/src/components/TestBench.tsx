@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { suiteFor } from "@/data/checks";
+import { PLAIN } from "@/data/key";
 import { extractCode } from "@/lib/python";
 import type { RunState } from "@/lib/runMachine";
 import { Outcome, RUN_LIMIT_MS, runBench, summarize } from "@/lib/testbench";
@@ -35,13 +36,14 @@ export function TestBench({ run }: { run: RunState }) {
         <span>U6 · Test bench</span>
         <span className="dim">{outcome?.kind === "result" ? `python ${outcome.result.python} · wasm` : "in your browser"}</span>
       </h2>
+      <p className="blk-sub">{PLAIN.u6}</p>
       <div className="runrow">
         <button type="button" className="btn-run silk" onClick={go} disabled={!ready || busy}>
           {suite ? "Run checks ▸" : "Run code ▸"}
         </button>
         <span className="dim" style={{ fontSize: 12 }} aria-live="polite">
           {busy ? (phase === "booting" ? "starting Python… (first use downloads ~6 MB)" : "running…")
-            : !ready ? "available when a listing has finished"
+            : !ready ? (run.phase === "idle" ? "play a run first: checks run on the finished listing" : "available when the listing has finished")
             : suite ? `${suite.checks.length} hand-written checks for this example prompt`
             : run.phase === "stopped" ? "partial output: runs it, no checks"
             : "custom prompt: reports what the code does, no pass/fail"}

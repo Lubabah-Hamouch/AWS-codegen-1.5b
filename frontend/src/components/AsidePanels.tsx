@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { BUDGET, EVAL, PERF } from "@/data/facts";
+import { PLAIN } from "@/data/key";
 import type { RunRecord } from "@/lib/history";
 
 export function EvalPanel() {
   return (
     <section className="blk" aria-labelledby="u5">
       <h2 id="u5" className="silk"><span>U5 · Eval · shipped GGUF</span><Link href="/notes/#eval" className="dim">→</Link></h2>
+      <p className="blk-sub">{PLAIN.u5}</p>
       <div className="kv"><span>HumanEval pass@1</span><span className="au">{EVAL.humaneval.toFixed(1)}%</span></div>
       <div className="kv"><span>HumanEval+ pass@1</span><span>{EVAL.humanevalPlus.toFixed(1)}%</span></div>
       <div className="kv"><span>format clean</span><span>{EVAL.formatClean}%</span></div>
@@ -19,6 +21,7 @@ export function BudgetPanel() {
   return (
     <section className="blk" aria-labelledby="r1">
       <h2 id="r1" className="silk"><span>R1 · Budget</span><Link href="/notes/#capacity" className="dim">→</Link></h2>
+      <p className="blk-sub">{PLAIN.r1}</p>
       <div className="kv"><span>per visitor</span><span>{BUDGET.anonPerIp} live / day</span></div>
       <div className="kv"><span>global cap</span><span>{BUDGET.globalDaily} / day</span></div>
       <div className="kv"><span>per generation</span><span>{PERF.gbS} GB·s</span></div>

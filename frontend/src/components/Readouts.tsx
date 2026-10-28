@@ -37,6 +37,7 @@ export function Readouts({ run }: { run: RunState }) {
       <div className="ro trace">
         <span className="lab silk"><span className="tp">● TP2</span><span className="dim">rate trace · 0–25 tok/s · dashed = median {PERF.tokS}</span></span>
         <RateTrace times={run.tokenTimes} />
+        {run.phase === "idle" && <span className="sub">speed over time, plotted as tokens arrive</span>}
       </div>
     </div>
   );
