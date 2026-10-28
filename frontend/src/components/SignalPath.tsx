@@ -57,7 +57,7 @@ export function SignalPath(p: Props) {
   const tooLong = p.prompt.length > MAX_PROMPT_CHARS;
 
   return (
-    <div className="path">
+    <div className="path" id="controls" tabIndex={-1}>
       <section className="blk u1" aria-labelledby="u1">
         <h2 id="u1" className="silk"><span>U1 · Spec in</span><span className="au">J1</span></h2>
         <div className="srcsw silk" role="group" aria-label="Source">

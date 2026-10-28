@@ -1,25 +1,26 @@
-/* Theme presets. Every colour in the app is one of these variables; components never hard-code colours, so a preset
+/* Theme presets. --line is for decorative dividers; --ctl (>= 3:1 on every surface) outlines interactive controls.
+   Every colour in the app is one of these variables; components never hard-code colours, so a preset
    is exactly one block here (plus its id in lib/themes.ts and public/theme-init.js). */
 :root,
 [data-theme="soldermask"] {
   --bg: #0b241c; --bg2: #081b15; --act: #0e2d23; --ink: #e8e4d8; --dim: #9fb8ad; --line: #2f5a49;
-  --cu: #d79a5b; --au: #e3c26b; --tp: #ec8174; --sig2: #8bb7a5; --gut: #5f8475; --gutline: #1d3f33;
-  --on: #0b241c; --frame: #e8e4d8; color-scheme: dark;
+  --cu: #d79a5b; --au: #e3c26b; --tp: #ec8174; --sig2: #8bb7a5; --gut: #6f9586; --gutline: #1d3f33;
+  --on: #0b241c; --frame: #e8e4d8; --ctl: #5e8a78; color-scheme: dark;
 }
 [data-theme="instrument"] {
   --bg: #0d0c0a; --bg2: #080706; --act: #18140c; --ink: #f2e6cf; --dim: #a8977a; --line: #3a3224;
-  --cu: #e8a33a; --au: #ffcf6b; --tp: #ef7d6d; --sig2: #7fc8bd; --gut: #6f6350; --gutline: #2a241a;
-  --on: #0d0c0a; --frame: #cdbb98; color-scheme: dark;
+  --cu: #e8a33a; --au: #ffcf6b; --tp: #ef7d6d; --sig2: #7fc8bd; --gut: #968669; --gutline: #2a241a;
+  --on: #0d0c0a; --frame: #cdbb98; --ctl: #7d6c50; color-scheme: dark;
 }
 [data-theme="tty"] {
   --bg: #121212; --bg2: #000000; --act: #1c1c1c; --ink: #d0d0d0; --dim: #8f8f8f; --line: #3a3a3a;
-  --cu: #5fd7af; --au: #ffd75f; --tp: #ff5f87; --sig2: #87afff; --gut: #626262; --gutline: #262626;
-  --on: #000000; --frame: #d0d0d0; color-scheme: dark;
+  --cu: #5fd7af; --au: #ffd75f; --tp: #ff5f87; --sig2: #87afff; --gut: #8a8a8a; --gutline: #262626;
+  --on: #000000; --frame: #d0d0d0; --ctl: #6c6c6c; color-scheme: dark;
 }
 [data-theme="datasheet"] {
   --bg: #ffffff; --bg2: #f3f3f1; --act: #fffaf0; --ink: #111111; --dim: #555555; --line: #c4c4c4;
-  --cu: #a3561a; --au: #7a5600; --tp: #c8102e; --sig2: #2f6f5a; --gut: #8a8a8a; --gutline: #dddddd;
-  --on: #ffffff; --frame: #111111; color-scheme: light;
+  --cu: #a3561a; --au: #7a5600; --tp: #c8102e; --sig2: #2f6f5a; --gut: #6b6b6b; --gutline: #dddddd;
+  --on: #ffffff; --frame: #111111; --ctl: #868686; color-scheme: light;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -31,6 +32,9 @@ a:hover { color: var(--ink); }
 :focus-visible { outline: 2px solid var(--au); outline-offset: 2px; }
 button { font: inherit; color: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: 0.5; }
+.skip { position: absolute; left: 16px; top: -48px; z-index: 30; background: var(--au); color: var(--on); padding: 8px 14px; font-weight: 600; text-decoration: none; }
+.skip:focus { top: 8px; color: var(--on); }
+#controls:focus { outline: none; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 .silk { font-family: var(--font-silk), "Arial Narrow", sans-serif; text-transform: uppercase; letter-spacing: 0.08em; }
@@ -80,7 +84,7 @@ kbd { font-family: inherit; border: 1px solid var(--line); padding: 0 4px; font-
 .banner.info { border-color: var(--sig2); }
 .banner strong { font-weight: 600; }
 .banner .act { margin-left: auto; display: flex; gap: 8px; }
-.btn-ghost { background: transparent; border: 1px solid var(--line); padding: 0 12px; min-height: 36px; font-size: 12px; }
+.btn-ghost { background: transparent; border: 1px solid var(--ctl); padding: 0 12px; min-height: 36px; font-size: 12px; }
 .btn-ghost:hover { border-color: var(--au); color: var(--au); }
 
 /* ---------- readouts ---------- */
@@ -125,18 +129,18 @@ kbd { font-family: inherit; border: 1px solid var(--line); padding: 0 4px; font-
 @media (max-width: 1100px) { .route { display: none; } }
 
 /* U1 */
-.srcsw { display: flex; border: 1px solid var(--line); align-self: flex-start; }
+.srcsw { display: flex; border: 1px solid var(--ctl); align-self: flex-start; }
 .srcsw button { background: transparent; border: 0; padding: 0 10px; min-height: 30px; font-size: 11px; }
-.srcsw button + button { border-left: 1px solid var(--line); }
+.srcsw button + button { border-left: 1px solid var(--ctl); }
 .srcsw button[aria-pressed="true"] { background: var(--act); color: var(--au); }
-.spec { font-family: inherit; font-size: 13px; line-height: 1.5; color: var(--ink); background: var(--bg2); border: 1px solid var(--line); border-radius: 0; padding: 8px; resize: vertical; width: 100%; min-height: 72px; }
+.spec { font-family: inherit; font-size: 13px; line-height: 1.5; color: var(--ink); background: var(--bg2); border: 1px solid var(--ctl); border-radius: 0; padding: 8px; resize: vertical; width: 100%; min-height: 72px; }
 .spec:read-only { color: var(--dim); }
 .runrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .btn-run { font-size: 13px; font-weight: 700; background: var(--cu); color: var(--on); border: 0; border-radius: 0; padding: 0 18px; min-height: 40px; }
 .btn-run:hover:not(:disabled) { background: var(--au); }
 .btn-stop { background: var(--tp); }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; }
-.chips button { background: transparent; border: 1px solid var(--line); font-size: 11px; padding: 2px 8px; min-height: 26px; color: var(--dim); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chips button { background: transparent; border: 1px solid var(--ctl); font-size: 11px; padding: 2px 8px; min-height: 26px; color: var(--dim); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chips button:hover { color: var(--au); border-color: var(--au); }
 .chips button[aria-pressed="true"] { color: var(--au); border-color: var(--au); background: var(--act); }
 .tag { font-size: 10px; border: 1px solid currentColor; padding: 0 4px; letter-spacing: 0.06em; }

@@ -36,7 +36,12 @@ export default function Playground() {
     setRemaining(loadRemaining());
     fetchStatus().then((s) => {
       setStatus(s);
-      if (s.live === false) setMode("replay");
+      if (s.live === false) {
+        // The live controls are about to be replaced; don't drop a keyboard user's focus on <body>.
+        const hadFocus = document.getElementById("controls")?.contains(document.activeElement);
+        setMode("replay");
+        if (hadFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>("#controls [aria-pressed=true]")?.focus());
+      }
     });
     loadIndex()
       .then((ix) => { setReplays(ix); setReplayId((cur) => cur ?? ix[0]?.id ?? null); })

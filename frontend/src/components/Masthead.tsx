@@ -4,6 +4,8 @@ import { ThemePicker } from "./ThemePicker";
 
 export function Masthead({ page }: { page: "schematic" | "datasheet" }) {
   return (
+    <>
+    <a className="skip" href={page === "schematic" ? "#controls" : "#overview"}>Skip to {page === "schematic" ? "controls" : "content"}</a>
     <header className="mast">
       <div className="mast-title">
         <span className="silk dim" style={{ fontSize: 11 }}>
@@ -45,6 +47,7 @@ export function Masthead({ page }: { page: "schematic" | "datasheet" }) {
         </table>
       </div>
     </header>
+    </>
   );
 }
 

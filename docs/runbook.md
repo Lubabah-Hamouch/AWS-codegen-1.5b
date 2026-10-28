@@ -1,4 +1,31 @@
-# Backend runbook
+# Runbook
+
+Site: **https://d2js86b0xg0ozs.cloudfront.net** (playground and `/notes/`). Backend: Lambda `codegen-backend`.
+
+## Going live to show someone (quick reference)
+
+The service is **parked by default**: kill switch ON, site in replay mode. Turn it on deliberately, turn it off after.
+There is no schedule that turns it on.
+
+```powershell
+infra\scripts\killswitch.ps1 off                    # 1. flag OFF, status.json -> live, URL auth -> NONE
+curl.exe -m 150 https://sug6pvql5qkkk3tm7udviuyoc40jwvys.lambda-url.eu-north-1.on.aws/health   # 2. warm-up
+#                                                      3. reload the site: U1 shows "Live", Run is enabled
+infra\scripts\killswitch.ps1 on                     # 4. afterwards: both layers back on, status.json -> paused
+```
+
+- **Step 2 is not optional.** If the function is cold, the first visitor waits 4-9 s for the first token. `{"ready": true}`
+  means warm. It works while the kill switch is ON, so it can come first.
+- **Reload pages that were already open.** The site reads status.json once on load; an open tab stays in replay mode.
+- **After `killswitch.ps1 on`, the next `off` takes ~25-40 s to take effect** (the URL auth change propagates slowly; requests
+  can flap 200/403 meanwhile). If you will switch again soon, park with `python infra\scripts\seed_state.py --kill on`
+  instead: layer 1 only, takes effect immediately in both directions, still refuses every generation.
+- **Several people on one network share one IP**, so 5 live runs/day between them. For a demo:
+  `python infra\scripts\seed_state.py --set anon_ip_daily=20`, and back to `anon_ip_daily=5` afterwards. The global cap
+  (100/day) keeps the month inside the free tier either way.
+- Check state any time: `infra\scripts\killswitch.ps1 status` (URL auth type, kill flag, limits).
+- If the page says "Paused by circuit breaker", the breaker tripped on an invocation flood. Find out why (CloudWatch
+  `Invocations` for `codegen-backend`) before turning it back on.
 
 Account `<redacted-account-id>`, region **eu-north-1** (Stockholm). Profile `codegen-spike`. The account is a "project account"
 in AWS's new sign-up experience: AWS manages its Organization SCPs, and everything outside the project region is denied.
@@ -42,14 +69,14 @@ Anonymous per-IP limits key on the Function URL's own `requestContext.http.sourc
 `x-amzn-request-context`). `x-forwarded-for` is **not** used: the Function URL passes a client-supplied one through
 unchanged, so it was forgeable (measured).
 
-## Deploy
+## Deploy the backend
 
 ```powershell
 infra\scripts\build_push.ps1 -Dockerfile Dockerfile -Tag model-N          # arm64 image -> ECR (prints IMAGE_URI)
 cd infra
 sam deploy -t backend.yaml --stack-name codegen-backend `
   --image-repository <redacted-account-id>.dkr.ecr.eu-north-1.amazonaws.com/codegen-backend `
-  --parameter-overrides "ImageUri=<IMAGE_URI>"
+  --parameter-overrides "ImageUri=<IMAGE_URI> SiteOrigin=https://d2js86b0xg0ozs.cloudfront.net StatusBucket=codegen-frontend-sitebucket-xwl33y2kvcnw"
 curl.exe -m 150 <FunctionUrl>/health                                       # WARM-UP after every new image
 python infra\scripts\live_tests_model.py <FunctionUrl>                     # kill switch, caps, keys, SSE, out-of-band kill
 python infra\scripts\live_tests_hardening.py <FunctionUrl>                 # IP spoofing, daily warm-up, circuit breaker
@@ -59,6 +86,8 @@ python infra\scripts\live_tests_hardening.py <FunctionUrl>                 # IP 
   takes ~75-90 s: Lambda fetches the 1 GB layer, init exceeds 10 s and is retried inside the invocation, right at the 90 s
   timeout. If only the app layer changed, the first start took 11 s. Later cold starts take 4-9 s. `/health` is unguarded,
   so the warm-up works while the kill switch is ON. Repeat it if the first call times out.
+- `SiteOrigin` is the only browser origin CORS allows (plus `http://localhost:3000` for `npm run dev`); `StatusBucket` is
+  where the breaker writes status.json. Both are outputs of the `codegen-frontend` stack.
 - `--image-repository` is required by SAM for image functions; pointing it at our repo stops SAM creating a companion repo.
 - **Memory is capped at 3008 MB on this account.** 3008 MB / 2 threads is the chosen config; see
   [backend_capacity.md](backend_capacity.md) for the measurements and the free-tier math.
@@ -70,6 +99,53 @@ Stacks: `codegen-persistent` (DynamoDB, retained), `codegen-ecr` (image repo, ke
 (function, URL, daily warm-up rule, alarm, SNS topic, breaker). Tear down with `infra\teardown.ps1` (backend only) or `-All`.
 
 Function URL: `https://sug6pvql5qkkk3tm7udviuyoc40jwvys.lambda-url.eu-north-1.on.aws/` (POST `/generate`, GET `/health`).
+
+## status.json (how the site knows the backend is paused)
+
+`https://<site>/status.json` = `{"live": bool, "since": "<UTC>", "note": "live" | "paused" | "circuit breaker"}`.
+
+- Written to the site bucket by `seed_state.py --kill on|off` (so also by `killswitch.ps1`) and by the circuit breaker.
+  `python infra\scripts\seed_state.py --status` re-publishes it from the current kill flag if it ever drifts.
+- Served by CloudFront with caching disabled, and stored with `Cache-Control: no-store`. Reading it costs no Lambda invocation,
+  which is the point: a parked backend shows replays without anyone sending requests that would fail.
+- The site reads it once on page load. `live: false` -> replay mode and the "paused" banner. Missing or unreadable -> the
+  site assumes live and lets the first request decide.
+- It is advisory. The guardrails are what actually refuse requests; a stale `live: true` only means a visitor sees a
+  coded refusal (`disabled`) and the page switches itself to replay mode.
+- The frontend deploy never overwrites it (excluded from the sync).
+
+## Deploy the frontend
+
+```powershell
+frontend\scripts\deploy.ps1          # next build (webpack) -> s3 sync -> CloudFront invalidation
+cd frontend; npx playwright test      # 22 browser checks against the deployed site (replay mode, themes, a11y)
+```
+
+- Stack `codegen-frontend` (`infra/frontend.yaml`): private S3 bucket, CloudFront with origin access control, a viewer-request
+  function mapping `/notes/` to `/notes/index.html`, security headers. CSP: `script-src 'self'`, `connect-src` = the Function URL.
+- **Webpack, not Turbopack.** Turbopack's static export injects an inline `<script>`, which that CSP blocks. `deploy.ps1`
+  refuses to publish if any inline script appears in the export.
+- `_next/` assets are cached for a year (hashed names); HTML and replays for 60 s, and each deploy invalidates `/*`.
+- The API URL is in `frontend/.env.production` / `.env.development` (public by design). The demo API key is never used by
+  the frontend.
+- Checks: `npm test` (19 unit), `node scripts/contrast.mjs` (WCAG contrast of all four themes),
+  `LIVE=1 npx playwright test tests/e2e/live.spec.ts` (one real cross-origin run; kill switch must be OFF).
+- Local dev: `cd frontend; npm run dev` -> http://localhost:3000 (no status.json locally, so it starts in live mode).
+
+## Record new replays
+
+Needed after anything that changes outputs (new model, new prompt version) so replays match what the live backend produces.
+
+```powershell
+python frontend\scripts\record_replays.py            # kill OFF -> warm-up -> 5 runs -> kill ON (always, via atexit)
+frontend\scripts\deploy.ps1
+```
+
+- Prompts are the list in the script (`RUNS`), kept in step with the example chips in `frontend/src/data/facts.ts`.
+- Each run uses the demo key (`infra/.demo-key`, 20/day), so recording does not spend the anonymous quota; the key and the
+  quota left are not written to the files. Output: `frontend/public/replays/<id>.json` + `index.json`.
+- A recording stores every token with its arrival time (ms since the request was sent), the first-byte time, and the
+  server's `done` event. The site replays that timing exactly and labels it "Replay" with the recording time and host.
 
 ## Scheduled warm-up
 
@@ -85,6 +161,8 @@ It bypasses both kill-switch layers (direct invoke, not the URL), which is inten
 - `infra/scripts/live_tests_model.py`: the guardrails against the deployed function.
 - `infra/scripts/live_tests_hardening.py`: client-IP spoofing, the warm-up rule and event, the circuit breaker end to end
   (it drives the real alarm into ALARM with `set-alarm-state`).
+
+- `frontend`: `npm test`, `npx playwright test`, `node scripts/contrast.mjs` (see "Deploy the frontend").
 
 ## Known limits
 
