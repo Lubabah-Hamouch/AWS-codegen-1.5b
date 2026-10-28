@@ -288,9 +288,47 @@ Fine-tuning fixed 21 tasks the base model fails and broke 19 it passes.
   `Foo`), all in quoted annotations, which do not fail at runtime; HumanEval/136's was unquoted, which does.
 - **Tuple immutability does not show up here.** No HumanEval failure is an assignment into a tuple. The playground's
   merge_intervals recording fails exactly that way (`merged[-1][1] = ...` on a tuple), but HumanEval cannot measure it;
-  scoping training on it would need its own probe set first.
+  the probe below does.
 - **Limits.** One label per task, assigned by hand. 164 tasks give about ±7 points of noise, and per-category counts
   of 5 to 8 are too small to scope a training run on their own.
+
+## Tuple-immutability probe
+
+40 small tasks written for this probe (`training/eval/probes/tuple_tasks.py`), each a plain request in the playground's
+style whose natural solution builds or updates tuples: merging intervals, run-length encoding, grids as tuples of
+tuples, (name, count) records. Prompts do not mention mutation. Every task has a reference solution, and the scorer is
+checked against deliberate mistakes (`tuple_probe.py validate`, also run in CI).
+
+Both models are Q4_K_M GGUFs served by the same llama.cpp build on CPU: the shipped model, and the base model
+converted and quantised the same way, so quantisation and runtime are held equal and only the fine-tune differs.
+Prompting is the deployed one (the request as the only user message), greedy, max 512 tokens. Only definitions are
+executed, so example calls a model appends cannot crash the run before the tests (the base model appends them to most
+answers).
+
+| Outcome (one per task) | Base Q4_K_M | Shipped Q4_K_M |
+|---|---|---|
+| Correct | 24 | 23 |
+| `TypeError: 'tuple' object does not support item assignment` | 3 | 3 |
+| Other attempt to change a tuple in place | 0 | 0 |
+| Right values, lists instead of the tuples asked for | 0 | 2 |
+| Wrong answer | 7 | 4 |
+| Other error | 6 | 8 |
+| Changed the caller's input (any outcome) | 4 | 6 |
+
+- **Tuple immutability is a shared, base-model trait, at about 3 in 40.** Two of the three tasks are the same for both
+  models, and so is the mistake: copying a tuple of tuples shallowly (`new_board = list(board)`) and then assigning into
+  an inner tuple (`new_board[row][col] = mark`). merge_intervals fails on both, exactly as in the playground recording.
+  The fine-tune neither caused it nor fixed it.
+- **The shipped model's bigger problem here is imports.** 5 of its 8 errors are a NameError for a typing name used in
+  the signature and never imported (`Tuple` 4 times, `List` once): the function is never defined. Tuple-shaped tasks
+  invite `Tuple[...]` hints, so this is far more frequent than on HumanEval (1 in 164). With `from typing import *`
+  added, 4 of the 5 pass, which would put the shipped model at 27/40 against the base's 24. The format check added
+  for HumanEval/136 flags exactly these 5 answers; the base model writes no type hints, so it cannot make this mistake.
+- **Mutating the caller's input** (sorting the argument list in place, `items[i] = ...` on a passed-in list) happens
+  in 4 base and 6 shipped answers, including merge_intervals for both. It is not counted as a failure, since the
+  prompts did not forbid it, but it is the playground recording's second problem.
+- **Limits.** 40 tasks, one greedy sample each: differences of 1 to 3 tasks between the models are noise. The probe
+  measures how often the mistake happens, not why.
 
 ## Reproduction
 
@@ -301,6 +339,14 @@ python humaneval_eval.py score --config ckpt250
 python humaneval_eval.py table
 python contamination_check.py
 python failure_analysis.py diagnose && python failure_analysis.py table   # saved outputs only
+python tuple_probe.py validate
+# base Q4_K_M: copy the HF snapshot with `cp -rL` (the cache's symlinks confuse convert_hf_to_gguf.py), convert to f16
+# in an environment with sentencepiece installed (the converter only falls back to Qwen's BPE vocab when it can import
+# it), then llama-quantize ... Q4_K_M, as for the shipped model
+python tuple_probe.py gen --name base_q4km --gguf <base Q4_K_M>
+python tuple_probe.py gen --name gguf_q4km --gguf ckpt250-Q4_K_M.gguf
+python tuple_probe.py score --name base_q4km && python tuple_probe.py score --name gguf_q4km
+python tuple_probe.py table base_q4km gguf_q4km
 ```
 
 Outputs go to `~/work/eval/` (outside the repo). Execution uses the data pipeline's sandbox
