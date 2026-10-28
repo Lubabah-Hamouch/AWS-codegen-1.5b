@@ -5,8 +5,11 @@ POST /events     non-HTTP invocations (the daily EventBridge warm-up); returns 2
 POST /generate   {"prompt": str, "max_tokens": int?}   header x-api-key optional (no key = anonymous tier)
                  -> text/event-stream:  event: token  data: {"t": "<text>"}
                                         event: done   data: {"finish_reason", "tokens", "prompt_tokens", "tok_s", "ttft_s", "prompt_version"}
-                                        event: error  data: {"error": "..."}
-Errors before streaming starts are plain JSON with an HTTP status (400, 401, 413, 429, 503).
+                                        event: error  data: {"error": "...", "code": "generation_failed"}
+                 done also carries "remaining": the caller's runs left today (null if unknown)
+Errors before streaming starts are JSON {"error": message, "code": code} with an HTTP status:
+  400 bad_request, 401 invalid_key, 404 not_found, 413 too_large, 429 busy|daily_limit|daily_capacity,
+  503 disabled|unavailable|starting. Clients branch on `code`; `error` is for humans.
 """
 
 import json
@@ -89,7 +92,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.split("?")[0] == "/health":
             return self._json(200 if state["ready"] else 503, state)
-        self._json(404, {"error": "not found"})
+        self._json(404, {"error": "not found", "code": "not_found"})
 
     def do_POST(self):
         if self.path.split("?")[0] == "/events":
@@ -98,24 +101,27 @@ class H(BaseHTTPRequestHandler):
             self.rfile.read(min(int(self.headers.get("content-length", 0)), MAX_BODY))
             return self._json(200, {"warm": state["ready"]})
         if self.path.split("?")[0] != "/generate":
-            return self._json(404, {"error": "not found"})
+            return self._json(404, {"error": "not found", "code": "not_found"})
         try:
             n = int(self.headers.get("content-length", 0))
             if n > MAX_BODY:
-                return self._json(413, {"error": "request too large"})
+                return self._json(413, {"error": "request too large", "code": "too_large"})
             req = json.loads(self.rfile.read(n) or b"{}")
             messages = prompts.render_generate(req.get("prompt") if isinstance(req, dict) else None)
             asked = req.get("max_tokens", 512)
             if not isinstance(asked, int) or asked < 1:
                 raise prompts.PromptError("max_tokens must be a positive integer")
         except (ValueError, UnicodeDecodeError) as e:  # PromptError and bad JSON are both ValueError
-            return self._json(400, {"error": str(e)})
+            return self._json(400, {"error": str(e), "code": "bad_request"})
         if not state["ready"]:
-            return self._json(503, {"error": "starting"}, {"retry-after": "5"})
+            return self._json(503, {"error": "starting", "code": "starting"}, {"retry-after": "5"})
 
         adm = guard.admit(self.headers.get("x-api-key"), self.client_ip())
         if not adm.ok:
-            return self._json(adm.status, {"error": adm.message}, {"retry-after": "2"} if adm.status == 429 else None)
+            to_midnight = str(86400 - int(time.time()) % 86400)  # daily counters reset at 00:00 UTC
+            retry = {"busy": "2", "daily_limit": to_midnight, "daily_capacity": to_midnight}.get(adm.code)
+            return self._json(adm.status, {"error": adm.message, "code": adm.code},
+                              {"retry-after": retry} if retry else None)
         try:
             self.stream(messages, min(asked, adm.max_tokens), adm)
         except (BrokenPipeError, ConnectionResetError):
@@ -160,7 +166,7 @@ class H(BaseHTTPRequestHandler):
                                  "prompt_tokens": usage.get("prompt_tokens"),
                                  "tok_s": round(timings["predicted_per_second"], 1) if timings.get("predicted_per_second") else None,
                                  "ttft_s": round(ttft, 2) if ttft is not None else None,
-                                 "prompt_version": prompts.VERSION})
+                                 "prompt_version": prompts.VERSION, "remaining": adm.remaining})
             self.wfile.write(b"0\r\n\r\n")
             self.wfile.flush()
             log(f"done subject={adm.subject} tokens={usage.get('completion_tokens')} finish={finish} "
@@ -173,7 +179,7 @@ class H(BaseHTTPRequestHandler):
                 up.close()
             guard.release(adm)
             try:
-                self._event("error", {"error": "generation failed"})
+                self._event("error", {"error": "generation failed", "code": "generation_failed"})
                 self.wfile.write(b"0\r\n\r\n")
                 self.wfile.flush()
             except OSError:

@@ -90,8 +90,9 @@ try:
     check("200 + token events + one done event", s == 200 and len(done) == 1 and len(ev) > 20, f"events={len(ev)} ttft={ttft and round(ttft, 2)}s")
     check("output is one fenced python block with docstring and type hints",
           text.count("```") == 2 and text.lstrip().startswith("```python") and '"""' in text and "->" in text, repr(text[:70]))
-    check("done event carries finish_reason, token counts, tok/s, prompt version",
-          done and done[0]["finish_reason"] == "stop" and done[0]["tokens"] and done[0]["tok_s"] and done[0]["prompt_version"] == "generate.v1", str(done[0]) if done else "")
+    check("done event carries finish_reason, token counts, tok/s, prompt version, remaining",
+          done and done[0]["finish_reason"] == "stop" and done[0]["tokens"] and done[0]["tok_s"] and done[0]["prompt_version"] == "generate.v1"
+          and done[0]["remaining"] == 999, str(done[0]) if done else "")
 
     s, ev, _ = post({"prompt": "Write a function that adds two numbers.", "max_tokens": 5})
     done = [d for n, d in ev if n == "done"]
@@ -105,26 +106,28 @@ try:
     with urllib.request.urlopen(ev_req, timeout=30) as r:
         body = json.loads(r.read())
     check("POST /events (scheduled warm-up) -> 200 warm", r.status == 200 and body.get("warm") is True, str(body))
-    check("empty prompt -> 400", post({"prompt": "  "})[0] == 400)
+    s, body, _ = post({"prompt": "  "})
+    check("empty prompt -> 400 bad_request", s == 400 and body.get("code") == "bad_request", str(body))
     check("non-string prompt -> 400", post({"prompt": 5})[0] == 400)
     check("oversized prompt -> 400", post({"prompt": "x" * 2001})[0] == 400)
     check("bad json -> 400", post(None, raw=b"{nope")[0] == 400)
     check("bad max_tokens -> 400", post({"prompt": "hi", "max_tokens": 0})[0] == 400)
-    check("oversized body -> 413", post(None, raw=b"{" + b" " * 9000 + b"}")[0] == 413)
+    s, body, _ = post(None, raw=b"{" + b" " * 9000 + b"}")
+    check("oversized body -> 413 too_large", s == 413 and body.get("code") == "too_large", str(body))
 
     # concurrency cap (1 slot): a second request while the first streams is rejected, then admitted after it ends
     res = {}
     t = threading.Thread(target=lambda: res.update(first=post({"prompt": "Write a Python function that checks if a number is prime.", "max_tokens": 200})))
     t.start()
     time.sleep(1.5)
-    s2 = post({"prompt": "Write a Python function that reverses a string."})[0]
+    s2, b2, _ = post({"prompt": "Write a Python function that reverses a string."})
     t.join()
-    check("second request during a stream -> 429 busy, first one finishes", s2 == 429 and res["first"][0] == 200, f"second={s2} first={res['first'][0]}")
+    check("second request during a stream -> 429 busy, first one finishes", s2 == 429 and b2.get("code") == "busy" and res["first"][0] == 200, f"second={s2} {b2} first={res['first'][0]}")
     check("slot released afterwards", post({"prompt": "Write a function that returns 1.", "max_tokens": 20})[0] == 200)
 
     put("config#killswitch", enabled=True)
     s, body, _ = post({"prompt": "Write a function that returns 1."})
-    check("kill switch ON -> 503 and nothing generated", s == 503 and body.get("error") == "service disabled", str(body))
+    check("kill switch ON -> 503 and nothing generated", s == 503 and body.get("code") == "disabled", str(body))
     put("config#killswitch", enabled=False)
 
     # a client that disconnects mid-stream must free the slot and the model

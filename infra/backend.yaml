@@ -7,6 +7,12 @@ Parameters:
   ImageUri: {Type: String, Description: "arm64 image pushed by infra/scripts/build_push.ps1"}
   MemoryMb: {Type: Number, Default: 3008, Description: "this account is capped at 3008 MB; Lambda gives ~1 vCPU per 1769 MB"}
   LlamaThreads: {Type: String, Default: "2"}
+  SiteOrigin:
+    Type: String
+    Description: "playground origin allowed by CORS (codegen-frontend SiteUrl, no trailing slash)"
+  StatusBucket:
+    Type: String
+    Description: "codegen-frontend BucketName; the breaker writes status.json there so the site switches to replays"
   BreakerInvocationsPer5Min:
     Type: Number
     Default: 600
@@ -47,9 +53,11 @@ Resources:
         AuthType: NONE
         InvokeMode: RESPONSE_STREAM
         Cors:
-          AllowOrigins: ['*']
+          AllowOrigins: [!Ref SiteOrigin, 'http://localhost:3000']
           AllowMethods: [GET, POST]
           AllowHeaders: [content-type, x-api-key]
+          ExposeHeaders: [retry-after]
+          MaxAge: 600
       Events:
         # Insurance against the image cache going cold after long idle (not documented by AWS either way): one
         # invocation a day, ~1 cold start = ~11 GB-s/day. Arrives at the app as POST /events via the Web Adapter.
@@ -96,6 +104,7 @@ Resources:
         Variables:
           TABLE_NAME: !Ref TableName
           TARGET_FUNCTION: !Ref Function
+          STATUS_BUCKET: !Ref StatusBucket
       Policies:
         - Statement:
             - Effect: Allow
@@ -104,12 +113,15 @@ Resources:
             - Effect: Allow
               Action: [dynamodb:PutItem]
               Resource: !Sub arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${TableName}
+            - Effect: Allow
+              Action: [s3:PutObject]
+              Resource: !Sub arn:aws:s3:::${StatusBucket}/status.json
       Events:
         Alarm:
           Type: SNS
           Properties: {Topic: !Ref BreakerTopic}
       InlineCode: |
-        import os, time
+        import json, os, time
         import boto3
 
         def handler(event, context):
@@ -118,6 +130,12 @@ Resources:
             # Layer 1 first: it is immediate. Layer 2 stops invocations (and their cost) once it propagates.
             boto3.client("dynamodb").put_item(TableName=os.environ["TABLE_NAME"], Item={
                 "pk": {"S": "config#killswitch"}, "enabled": {"BOOL": True}, "reason": {"S": f"circuit breaker {when}"}})
+            try:  # the site shows replays from its next load; the backend is already stopped either way
+                boto3.client("s3").put_object(Bucket=os.environ["STATUS_BUCKET"], Key="status.json",
+                    Body=json.dumps({"live": False, "since": when, "note": "circuit breaker"}).encode(),
+                    ContentType="application/json", CacheControl="no-store")
+            except Exception as e:
+                print(f"status.json not written: {e}")
             boto3.client("lambda").update_function_url_config(FunctionName=os.environ["TARGET_FUNCTION"], AuthType="AWS_IAM")
             print(f"breaker tripped at {when}: {msg[:500]}")
             return {"tripped": when}

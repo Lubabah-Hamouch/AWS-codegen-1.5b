@@ -115,6 +115,11 @@ check("breaker: alarm -> app kill switch ON", flag.get("reason", {}).get("S", ""
 check("breaker: alarm -> Function URL auth AWS_IAM", auth == "AWS_IAM", f"auth={auth}")
 took = settle(403)
 check("breaker: requests now refused by AWS (403) before invoking", took is not None, f"stable after {took}s")
+site = next(o["OutputValue"] for o in S.client("cloudformation").describe_stacks(StackName="codegen-frontend")["Stacks"][0]["Outputs"]
+            if o["OutputKey"] == "SiteUrl")
+with urllib.request.urlopen(site + "/status.json", timeout=20) as r:
+    st = json.loads(r.read())
+check("breaker: site status.json says paused by circuit breaker", st.get("live") is False and st.get("note") == "circuit breaker", str(st))
 
 # restore: URL auth back to NONE (kill switch stays ON), alarm back to OK
 LAM.update_function_url_config(FunctionName=FN, AuthType="NONE")

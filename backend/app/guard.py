@@ -1,7 +1,7 @@
 """Request guardrails, enforced before any generation work starts. All state lives in one DynamoDB table.
 
     adm = admit(api_key, client_ip)
-    if not adm.ok: respond(adm.status, adm.message)
+    if not adm.ok: respond(adm.status, {"error": adm.message, "code": adm.code})
     try: ...stream...
     finally: release(adm)
 
@@ -11,6 +11,9 @@ Checks, in order (each failure is a hard stop, and every unexpected error fails 
   3. concurrency slot slot#0..N-1, claimed with a conditional put; a slot expires on its own, so a crashed
                       invocation cannot leak capacity. N = config#global.max_concurrency
   4. daily counters   one transaction over (global, subject[, anon total]); any counter at its limit cancels it
+
+Denial codes (stable, for clients): disabled 503, invalid_key 401, busy 429, daily_capacity 429, daily_limit 429,
+unavailable 503 (failed closed).
 
 This replaces Lambda reserved concurrency, which this account cannot use yet (quota of 10, AWS needs 100 unreserved).
 """
@@ -46,15 +49,17 @@ class Admission:
     ok: bool
     status: int = 200
     message: str = ""
+    code: str = ""
     subject: str = ""
     max_tokens: int = DEFAULTS["max_tokens"]
     slot: str = ""
     token: str = ""
     counters: list = field(default_factory=list)
+    remaining: int | None = None  # the subject's runs left today, best effort
 
 
-def _deny(status: int, message: str, **kw) -> Admission:
-    return Admission(False, status, message, **kw)
+def _deny(status: int, code: str, message: str, **kw) -> Admission:
+    return Admission(False, status, message, code, **kw)
 
 
 def _n(item: dict, key: str, default):
@@ -104,7 +109,7 @@ def admit(api_key: str | None, client_ip: str, now: int | None = None) -> Admiss
         return _admit(api_key, client_ip, int(now if now is not None else time.time()))
     except Exception as e:  # unreachable table, throttling, bad data: refuse rather than run unguarded
         print(f"[guard] fail closed: {type(e).__name__}: {e}", flush=True)
-        return _deny(503, "service unavailable")
+        return _deny(503, "unavailable", "service unavailable")
 
 
 def _admit(api_key, client_ip, now) -> Admission:
@@ -114,13 +119,13 @@ def _admit(api_key, client_ip, now) -> Admission:
 
     kill = items.get("config#killswitch")
     if kill and kill.get("enabled", {}).get("BOOL"):
-        return _deny(503, "service disabled")
+        return _deny(503, "disabled", "service disabled")
     cfg = {k: _n(items.get("config#global", {}), k, v) for k, v in DEFAULTS.items()}
 
     if key_pk:
         key = items.get(key_pk)
         if not key or key.get("enabled", {}).get("BOOL") is False:
-            return _deny(401, "invalid api key")
+            return _deny(401, "invalid_key", "invalid api key")
         subject, subject_limit, tier_total = f"key#{key['name']['S']}", _n(key, "daily_limit", 20), None
     else:
         subject, subject_limit, tier_total = f"ip#{_hash(client_ip)[:16]}", cfg["anon_ip_daily"], cfg["anon_total_daily"]
@@ -128,7 +133,7 @@ def _admit(api_key, client_ip, now) -> Admission:
     token = uuid.uuid4().hex
     slot = _acquire_slot(cfg["max_concurrency"], token, now, cfg["slot_seconds"])
     if not slot:
-        return _deny(429, "busy, retry shortly")
+        return _deny(429, "busy", "busy, retry shortly")
 
     ttl = str(now + COUNTER_TTL_S)
     counters = [("global", f"day#{day}#global", cfg["global_daily"]), ("subject", f"day#{day}#{subject}", subject_limit)]
@@ -150,9 +155,21 @@ def _admit(api_key, client_ip, now) -> Admission:
         failed = [counters[i][0] for i, r in enumerate(reasons) if r.get("Code") == "ConditionalCheckFailed"]
         if not failed:
             raise
-        what = "daily capacity reached" if "global" in failed or "anonymous total" in failed else "daily limit reached"
-        return _deny(429, what)
-    return Admission(True, 200, "ok", subject, cfg["max_tokens"], slot, token, [pk for _, pk, _ in counters])
+        if "global" in failed or "anonymous total" in failed:
+            return _deny(429, "daily_capacity", "daily capacity reached")
+        return _deny(429, "daily_limit", "daily limit reached", remaining=0)
+    return Admission(True, 200, "ok", "", subject, cfg["max_tokens"], slot, token, [pk for _, pk, _ in counters],
+                     _remaining(counters[1][1], subject_limit))
+
+
+def _remaining(pk: str, limit: int) -> int | None:
+    # The transaction cannot return the new count; one consistent read can. Purely informational, so never fatal.
+    try:
+        item = ddb().get_item(TableName=TABLE, Key={"pk": {"S": pk}}, ConsistentRead=True).get("Item", {})
+        return max(limit - _n(item, "n", 0), 0)
+    except Exception as e:
+        print(f"[guard] remaining unknown: {e}", flush=True)
+        return None
 
 
 def release(adm: Admission) -> None:
