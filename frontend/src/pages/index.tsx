@@ -66,7 +66,12 @@ export default function Playground() {
 
   const record = useCallback((r: RunRecord) => setHistory(pushHistory(r)), []);
 
+  // Every run claims a number; a replay whose file arrives after a newer run has started does not play. Without this,
+  // a first visit's autoplay could load slowly and then play over a live run the visitor started meanwhile.
+  const runSeq = useRef(0);
+
   const runLive = useCallback(async () => {
+    runSeq.current++;
     const ctl = new AbortController();
     const t0 = performance.now();
     const since = () => performance.now() - t0;
@@ -111,6 +116,7 @@ export default function Playground() {
 
   const runReplay = useCallback(async () => {
     if (!replayId) return;
+    const seq = ++runSeq.current;
     let rep = cache.current.get(replayId);
     if (!rep) {
       try {
@@ -120,6 +126,7 @@ export default function Playground() {
         return;
       }
     }
+    if (seq !== runSeq.current) return; // something else started while the file loaded
     const r = rep;
     setReplayMeta(r);
     const t0 = performance.now();

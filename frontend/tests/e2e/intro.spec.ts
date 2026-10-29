@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
 // The plain-language on-ramp and the first-visit autoplay. Plain @playwright/test: every test here is a new visitor
@@ -6,8 +7,12 @@ import { expect, test, type Page } from "@playwright/test";
 const returning = (page: Page) => page.addInitScript(() => localStorage.setItem("cg.visited", "1"));
 const idle = (page: Page) => expect(page.getByText(/^Nothing generated yet\./)).toBeVisible();
 
+const paused = (page: Page) => page.route("**/status.json", (r) => r.fulfill({ contentType: "application/json",
+  body: '{"live": false, "since": "test", "note": "paused"}' }));
+
 test("first visit: a recorded run plays once without a click, and the page does not scroll", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop");
+  await paused(page);
   const errors: string[] = [];
   page.on("console", (m) => { if (m.type() === "error") errors.push(m.text()); });
   page.on("pageerror", (e) => errors.push(String(e)));
@@ -25,6 +30,7 @@ test("first visit: a recorded run plays once without a click, and the page does 
 
 test("first visit with reduced motion: nothing plays by itself", async ({ page }, info) => {
   test.skip(info.project.name !== "desktop");
+  await paused(page);
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Replay", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -135,4 +141,25 @@ test("first visit with the backend on: a recording plays, nothing is sent live",
   await expect(page.getByLabel("Generated code")).toContainText("def fibonacci", { timeout: 15_000 });
   await expect(page.getByText("Recorded", { exact: false }).first()).toBeVisible();
   expect(live).toBe(0);
+});
+
+test("first visit, backend on: pressing Try it live while the autoplay recording is still loading keeps the live answer", async ({ page }, info) => {
+  test.skip(info.project.name !== "desktop");
+  const rep = JSON.parse(readFileSync("public/replays/fibonacci.json", "utf8")); // run from frontend/, like the config
+  const sse = rep.tokens.map(([t]: [string]) => `event: token\ndata: ${JSON.stringify({ t })}\n\n`).join("")
+    + `event: done\ndata: ${JSON.stringify({ ...rep.done, ttft_s: 0.77, remaining: 4 })}\n\n`;  // 0.77: marks the live answer
+  await page.route("**/status.json", (r) => r.fulfill({ contentType: "application/json", body: '{"live": true, "since": "x", "note": "live"}' }));
+  await page.route("**/replays/fibonacci.json", async (r) => { await new Promise((ok) => setTimeout(ok, 1500)); await r.continue(); });
+  await page.route("**/generate", (r) => r.request().method() === "OPTIONS"
+    ? r.fulfill({ status: 204, headers: { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type" } })
+    : r.fulfill({ status: 200, headers: { "access-control-allow-origin": r.request().headers()["origin"] ?? "*", "content-type": "text/event-stream" }, body: sse }));
+  const autoplayFetch = page.waitForRequest("**/replays/fibonacci.json");
+  await page.goto("/");
+  await autoplayFetch; // the first-visit autoplay has started loading its recording (held 1.5 s above)...
+  await page.getByRole("button", { name: "Try it live ▸" }).click(); // ...and the visitor opts into live meanwhile
+  await expect(page.getByText("server 0.77 s")).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(3000); // past the moment the delayed recording arrives
+  await expect(page.getByText("server 0.77 s")).toBeVisible();
+  await expect(page.locator(".banner.info", { hasText: "Replay" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Live", exact: true })).toHaveAttribute("aria-pressed", "true");
 });

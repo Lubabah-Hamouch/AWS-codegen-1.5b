@@ -9,6 +9,14 @@ function watchErrors(page: Page) {
   return errors;
 }
 
+test("the real status.json is served uncached and says live or paused", async ({ request }) => {
+  const r = await request.get("/status.json");
+  expect(r.status()).toBe(200);
+  const s = await r.json();
+  expect(typeof s.live).toBe("boolean");
+  expect(["live", "paused", "circuit breaker"]).toContain(s.note);
+});
+
 test("paused backend: banner, replay plays a real recorded run, no CSP or console errors", async ({ page }, info) => {
   const errors = watchErrors(page);
   await page.goto("/");
