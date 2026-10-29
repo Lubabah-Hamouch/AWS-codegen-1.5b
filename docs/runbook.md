@@ -4,10 +4,10 @@ Site: **https://d2js86b0xg0ozs.cloudfront.net** (playground and `/notes/`). Back
 
 ## Live and paused (quick reference)
 
-**Current state: paused since 2026-10-29 01:45 UTC** (`infra\scripts\killswitch.ps1 status` is the source of truth).
-It was live from 00:19 to 01:45 UTC and was paused because Try it live sent a request on its own click, with the
-default example prompt; the fix (Try it live only opens the prompt box, Run sends) has to be deployed before it is
-opened again. Nothing switches it on or off on a schedule; only these commands and the circuit breaker do.
+**Current state: live since 2026-10-29 02:44 UTC** (`infra\scripts\killswitch.ps1 status` is the source of truth).
+It was paused from 01:45 to 02:44 UTC because Try it live sent a request on its own click, with the default example
+prompt; fixed in `754cf4f` (Try it live only opens the prompt box; Run sends) and verified against the real backend
+before reopening. Nothing switches it on or off on a schedule; only these commands and the circuit breaker do.
 
 ```powershell
 infra\scripts\killswitch.ps1 on                     # pause: both layers on, status.json -> paused (the site shows recordings)
@@ -51,8 +51,8 @@ in AWS's new sign-up experience: AWS manages its Organization SCPs, and everythi
 - `killswitch.ps1 on` engages both layers. A later `sam deploy` resets layer 2 to the template (`AuthType: NONE`).
 - Both layers cut off traffic but do not stop an invocation already running; the longest is the 90 s function timeout.
 - After the breaker trips, recovery is manual: find the cause, then `killswitch.ps1 off`.
-- The deployed state is whatever `killswitch.ps1 status` says. As of 2026-10-29 01:45 UTC it is paused: layer 1 ON,
-  URL auth AWS_IAM.
+- The deployed state is whatever `killswitch.ps1 status` says. As of 2026-10-29 02:44 UTC it is live: layer 1 OFF,
+  URL auth NONE, reserved concurrency 10.
 
 Concurrency: the account's Lambda limit is **1000** concurrent executions (it was 10 when the backend was built).
 `codegen-backend` has **reserved concurrency 10** (`ReservedConcurrentExecutions` in `backend.yaml`, deployed
@@ -243,8 +243,9 @@ Not in CI: GPU training, real-model evals, the Lambda image and stacks, and the 
   `python infra/scripts/signing_proxy.py` (127.0.0.1 only; signs requests with the operator's credentials) and
   `BASE_URL=<site or local build> PRIVATE_PROXY=http://127.0.0.1:8787 npx playwright test tests/e2e/private-live.spec.ts`;
   afterwards `seed_state.py --kill on`. The proxy hands the answer over in one piece, so the page's first-token time
-  and rate trace are not meaningful in this test (the server-measured numbers are). Run 2026-10-29 (when Try it live still sent on click): it sent
-  one request, 106 tokens, clean EOS, 5/5 checks. The alarm returns to OK on its own about 5 minutes later; the breaker
+  and rate trace are not meaningful in this test (the server-measured numbers are). Run 2026-10-29 after the fix, on the deployed build: Try it live and picking the palindrome example sent nothing;
+  Run sent one request carrying that prompt; the real answer passed 5/5. An earlier run (when Try it live still sent
+  on click) sent one request, 106 tokens, clean EOS, 5/5 checks. The alarm returns to OK on its own about 5 minutes later; the breaker
   only acts on a new transition into ALARM, so check it is OK before relying on it again.
 
 - `frontend`: `npm test`, `npx playwright test`, `node scripts/contrast.mjs` (see "Deploy the frontend").

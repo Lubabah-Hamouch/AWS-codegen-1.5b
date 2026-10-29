@@ -28,10 +28,11 @@ async function live(page: Page, generate: (r: Route) => unknown) {
 const run = (page: Page) => page.locator("#controls").getByRole("button", { name: "Run ▸", exact: true });
 
 test("cold start: the wait says the model is waking up, wherever the visitor is looking", async ({ page }) => {
-  await live(page, async (r) => { await new Promise((ok) => setTimeout(ok, 4000)); await stream(r); });
+  // held 8 s: the notice appears 1.5 s in, so a loaded machine still has a wide margin (4 s once flaked under load)
+  await live(page, async (r) => { await new Promise((ok) => setTimeout(ok, 8000)); await stream(r); });
   await run(page).click();
   const status = page.locator("#controls").getByText(/waking up the model… \d+ s \(usually 5–10 s\)/);
-  await expect(status).toBeVisible({ timeout: 3000 });
+  await expect(status).toBeVisible({ timeout: 6000 });
   await expect(status).toBeInViewport(); // next to the button, so a phone visitor sees it too
   await expect(page.locator("#u3")).toContainText("waking up");
   await expect(page.locator("#u3")).not.toContainText("prefill");
