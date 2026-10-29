@@ -54,8 +54,9 @@ Concurrency: the account's Lambda limit is **1000** concurrent executions (it wa
 `codegen-backend` has **reserved concurrency 10** (`ReservedConcurrentExecutions` in `backend.yaml`, deployed
 2026-10-29): at most 10 executions at once, refused requests included, so a flood cannot fan out across the account
 before the circuit breaker (> 600 invocations in 5 minutes) reacts. Generations are capped separately at 2 by the
-application's slot lock (`backend/app/guard.py`, `max_concurrency` in `config#global`). Requests beyond 10 get 429
-from Lambda itself (the page treats that like any other refusal).
+application's slot lock (`backend/app/guard.py`, `max_concurrency` in `config#global`). Requests beyond 10 get a 429
+from Lambda itself, with no app error code: the page then shows a generic "Unexpected response (429)" (it has no
+specific message for this; it needs more than 10 simultaneous requests, far above normal traffic).
 
 ## Guardrail state (DynamoDB table `codegen-state`)
 
