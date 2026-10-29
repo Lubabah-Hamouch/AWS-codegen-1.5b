@@ -71,5 +71,9 @@ signature, Google-style docstring and an iterative implementation, then end-of-t
   so avoid MBPP for evaluation without decontaminating.
 - Trained for single-turn requests; behaviour in multi-turn chat or when the user asks for prose is untested.
   It will always answer with one code block.
-- The model is 1.5B: expect the usual small-model failure modes (subtle logic errors, wrong edge cases).
+- The model is 1.5B: expect the usual small-model failure modes (subtle logic errors, wrong edge cases). Measured
+  (eval_report.md, "Failure analysis"): most failures are spec reading, dropping a stated rule or solving a nearby
+  problem, and most of those are inherited from the base model. It sometimes assigns into a tuple (3 of 40 probe tasks,
+  the same rate as the base model) and sometimes uses a typing name in a hint without importing it (1 of 164 on
+  HumanEval, 5 of 40 on the probe); the playground adds such imports after generation and marks them.
 - Serving needs an OpenMP runtime (`libgomp`) for the llama.cpp CPU build; the container must install it.

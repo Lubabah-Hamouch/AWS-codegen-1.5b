@@ -5,11 +5,14 @@ that streams its output and runs it.
 
 **Live site: https://d2js86b0xg0ozs.cloudfront.net**
 
-The backend is **paused by default** to protect the free tier. While it is paused, the site plays back recorded real
-runs and labels them as recordings. When it is live, each visitor gets up to 5 generations a day, within shared daily caps.
+The site opens on **recorded real runs** (labelled as recordings, played back with their original timing). Live
+generation is **on** (since 2026-10-29): **Try it live** sends a request to the real model, up to 5 per visitor per day
+within a shared daily cap, and the operator can pause it at any time, in which case the site stays on recordings.
 
 ![The playground: a recorded fibonacci run flowing through spec, guard, model and stream, with the generated listing](docs/assets/playground.png)
-<sub>The playground in replay mode: a recorded run from the deployed model, played back with its original token timing.</sub>
+<sub>The playground with live generation on: a recorded run has just played back (the default); <b>Try it live</b> sits next to it.</sub>
+
+<img src="docs/assets/playground-mobile.png" width="320" alt="The playground on a phone: summary, steps, the two buttons and the live notice">
 
 ## What it is
 
@@ -20,7 +23,8 @@ runs and labels them as recordings. When it is live, each visitor gets up to 5 g
 - **Guardrails:** daily quotas per IP and globally, a 2-slot concurrency cap, a two-layer kill switch and an invocation
   circuit breaker. They are what keep the worst case inside the Lambda free tier.
 - **Frontend:** a static Next.js export on S3 and CloudFront with a strict CSP. It also runs the generated code in the
-  browser with Pyodide (WebAssembly) and checks it there.
+  browser with Pyodide (WebAssembly) and checks it there. Recordings are the default; a live run is the visitor's
+  explicit choice, and a slow first request says it is waking the model rather than looking frozen.
 
 ## Results (measured 2026-10-28)
 
@@ -33,12 +37,18 @@ HumanEval, 164 problems, greedy decoding:
 | Format-clean (one block, typed, documented) | 5.5% | 100% | 98.8% | **99.4%** |
 | Mean response tokens | 300 | 167 | 167 | **167** |
 
-"As served" adds one generation-time fix: a typing name used in a type hint but not imported gets its import added
-(and the playground marks the line). It is a shipped mitigation, not a retrain, and changes 1 answer of 164.
+"As served" (2026-10-29) adds one generation-time fix: a typing name used in a type hint but not imported gets its
+import added, and the playground marks the line. It is a shipped mitigation, not a retrain, and changes 1 answer of 164.
 
 The fine-tune's main win is **format**, not accuracy. The bf16 accuracy gains are not statistically significant on
 164 problems (paired McNemar p = 0.26 and 0.08), and 4-bit quantization gives most of them back. The full analysis,
-the contamination check and the paired tests are in [docs/eval_report.md](docs/eval_report.md).
+the contamination check and the paired tests are in [docs/eval_report.md](docs/eval_report.md), which also has:
+
+- **Where it fails:** all 65 failing HumanEval tasks, categorised. The largest group (30) is spec reading, dropping a
+  stated rule or solving a neighbouring problem, and 25 of those 30 fail for the base model too.
+- **A tuple-immutability probe** (40 fresh tasks): assigning into a tuple happens for base and fine-tuned alike, 3 of 40
+  each, so it is inherited, not caused by the fine-tune. The fine-tuned model's bigger problem there was missing
+  typing imports, which the shipped fix addresses (23 to 27 of 40, against the base model's 24).
 
 On Lambda the model decodes at about 15.9 tok/s (11.7–19.1). A cold start takes 4–9 s and a typical generation is
 billed about 9.5 s. Details: [docs/backend_capacity.md](docs/backend_capacity.md).
@@ -58,7 +68,7 @@ it in a Web Worker, with a 5 s limit. The recorded runs score:
 | palindrome | 5/5 |
 | roman numerals | 5/5 |
 | anagram groups | 4/4 |
-| merge intervals | **2/5**: the model assigns to an element of an input tuple, which raises `TypeError` |
+| merge intervals | **2/5**: the model assigns to an element of an input tuple, which raises `TypeError` (the base model makes the same mistake; see the probe above) |
 
 ![Test bench on the merge_intervals replay: 2/5 checks pass, three fail with TypeError: 'tuple' object does not support item assignment](docs/assets/testbench-merge-intervals.png)
 
@@ -72,7 +82,7 @@ browser ── CloudFront ── S3 (static site, status.json)
    │
    └── Lambda Function URL (streaming) ── guard (DynamoDB: quotas, slots, kill flag)
                                        └── llama-server (Q4_K_M GGUF, arm64)
-CloudWatch alarm ── SNS ── breaker Lambda: kill flag on + URL locked + status.json "paused"
+CloudWatch alarm ── SNS ── breaker Lambda: kill flag on + URL locked + status.json "circuit breaker"
 ```
 
 | Folder | Contents |
@@ -99,8 +109,9 @@ if invocations go above 600 in 5 minutes.
 - **CI:** every push and pull request runs the frontend, backend guard and CPU-only training tests and builds the site;
   deploys stay manual ([runbook](docs/runbook.md#tests)).
 - **Training and evaluation:** [training/README.md](training/README.md), [training/SETUP.md](training/SETUP.md)
-- **Frontend locally:** `cd frontend && npm ci && npm run dev`. This runs against the real backend, which allows
-  `localhost:3000`, or falls back to replay mode while the backend is paused.
+- **Frontend locally:** `cd frontend && npm ci && npm run dev`, then http://localhost:3000. Recordings work offline;
+  Try it live talks to the real backend (which allows `localhost:3000`) when it is on. Local dev has no status.json,
+  so the page treats the backend as reachable and lets the first request decide.
 
 ## License
 

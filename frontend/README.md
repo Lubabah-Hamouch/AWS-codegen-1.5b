@@ -12,7 +12,7 @@ The playground site: a static Next.js export (pages router, built with webpack) 
 | `src/data/checks.ts` | Hand-written check suites for the five example prompts |
 | `src/data/compare.ts` | The before/after pair: one real base and shipped answer from the HumanEval records, verbatim |
 | `src/data/key.ts` | Plain-language block subtitles and the schematic key |
-| `public/replays/` | Five recorded real runs, played back while the backend is paused |
+| `public/replays/` | Five recorded real runs: the default experience, and all there is while the backend is paused |
 | `public/testbench.worker.mjs` | Web Worker that runs generated code in Pyodide (CPython on WebAssembly) |
 | `scripts/` | `deploy.ps1`, `copy-pyodide.mjs` (runs before dev/build), `check-csp.mjs` (no inline scripts in the export), `og-image.mjs` (the link-preview image), `record_replays.py`, `contrast.mjs`, `serve_static.py` |
 

@@ -33,8 +33,8 @@ Weight repacking roughly doubles memory (a converted copy of the weights next to
 
 | Where | tok/s |
 |---|---|
-| WSL, 12 threads, x86 desktop (Phase 3) | 19.1 |
-| Docker x86, 2 CPUs (Spike 2) | 14-17 |
+| WSL, 12 threads, x86 desktop (the evaluation runs) | 19.1 |
+| Docker x86, 2 CPUs (local container test before the Lambda build) | 14-17 |
 | **Lambda Graviton2, 3008 MB (~1.7 vCPU), 2 threads** | **15.9** |
 | Lambda Graviton2, 1 thread | 8.8-11.0 |
 

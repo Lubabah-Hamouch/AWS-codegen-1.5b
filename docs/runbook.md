@@ -2,22 +2,22 @@
 
 Site: **https://d2js86b0xg0ozs.cloudfront.net** (playground and `/notes/`). Backend: Lambda `codegen-backend`.
 
-## Going live to show someone (quick reference)
+## Live and paused (quick reference)
 
-The service is **parked by default**: kill switch ON, site in replay mode. Turn it on deliberately, turn it off after.
-There is no schedule that turns it on.
+**Current state: live since 2026-10-29** (opened deliberately; `infra\scripts\killswitch.ps1 status` is the source of
+truth). Nothing switches it on or off on a schedule; only these commands and the circuit breaker do.
 
 ```powershell
-infra\scripts\killswitch.ps1 off                    # 1. flag OFF, status.json -> live, URL auth -> NONE
-curl.exe -m 150 https://sug6pvql5qkkk3tm7udviuyoc40jwvys.lambda-url.eu-north-1.on.aws/health   # 2. warm-up
-#                                                      3. reload the site: U1 shows "Live", Run is enabled
-infra\scripts\killswitch.ps1 on                     # 4. afterwards: both layers back on, status.json -> paused
+infra\scripts\killswitch.ps1 on                     # pause: both layers on, status.json -> paused (the site shows recordings)
+infra\scripts\killswitch.ps1 off                    # open: flag OFF, status.json -> live, URL auth -> NONE
+curl.exe -m 150 https://sug6pvql5qkkk3tm7udviuyoc40jwvys.lambda-url.eu-north-1.on.aws/health   # after opening: warm-up
+#                                                      then reload the site: "Try it live" appears in the intro
 ```
 
 - With the backend on, the site still opens in replay mode (and plays a recording on a first visit). A live request
   happens only when a visitor presses **Try it live**, which appears in the intro only while status.json says live
   and becomes the reset time once that visitor's runs for the day are used.
-- **Step 2 is not optional.** If the function is cold, the first visitor waits 4-9 s for the first token. `{"ready": true}`
+- **The warm-up is not optional.** If the function is cold, the first visitor waits 4-9 s for the first token. `{"ready": true}`
   means warm. It works while the kill switch is ON, so it can come first.
 - **Reload pages that were already open.** The site reads status.json once on load; an open tab stays in replay mode.
 - **After `killswitch.ps1 on`, the next `off` takes ~25-40 s to take effect** (the URL auth change propagates slowly; requests
@@ -48,7 +48,7 @@ in AWS's new sign-up experience: AWS manages its Organization SCPs, and everythi
 - `killswitch.ps1 on` engages both layers. A later `sam deploy` resets layer 2 to the template (`AuthType: NONE`).
 - Both layers cut off traffic but do not stop an invocation already running; the longest is the 90 s function timeout.
 - After the breaker trips, recovery is manual: find the cause, then `killswitch.ps1 off`.
-- The deployed state is parked with layer 1 **ON** unless someone has deliberately turned it off.
+- The deployed state is whatever `killswitch.ps1 status` says. As of 2026-10-29 it is live: layer 1 OFF, URL auth NONE.
 
 Lambda reserved concurrency is not available (account quota is 10; AWS needs 100 unreserved). A quota increase
 request is pending (`d11cd98e7fb74f548ee977967d8d0df6C7iTHQM7`, to 1100). Until it is approved the concurrency cap is the

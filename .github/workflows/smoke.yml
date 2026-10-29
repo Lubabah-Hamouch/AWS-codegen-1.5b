@@ -1,5 +1,6 @@
 # Browser checks against the deployed site, run by hand after frontend/scripts/deploy.ps1 (Actions tab -> smoke ->
-# Run workflow). The specs assume the backend is parked (status.json live=false). No AWS credentials: the site is public.
+# Run workflow). Works with the backend live or paused: the specs answer status.json themselves where it matters and
+# never reach the model (smoke.spec.ts checks the real status.json). No AWS credentials: the site is public.
 name: smoke
 
 on:

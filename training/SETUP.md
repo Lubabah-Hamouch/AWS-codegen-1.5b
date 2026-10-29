@@ -51,6 +51,12 @@ Re-run it whenever the pins change.
 
 ## vLLM for bulk generation (separate venv)
 
+- **GGUF conversion (`convert_hf_to_gguf.py`).** Two traps, both hit here. (1) The converter tries a SentencePiece
+  vocabulary first and only falls back to Qwen's BPE vocabulary when the attempt fails with *file not found*; without
+  the `sentencepiece` package it fails on the import instead and stops. Run it with a Python that has `sentencepiece`
+  (the vLLM venv below does), plus `PYTHONPATH=<llama.cpp>/gguf-py`. (2) Point it at a plain copy of a Hugging Face
+  snapshot (`cp -rL <snapshot> <dir>`): the cache's symlinks into `blobs/` confuse it ("Unrecognized model").
+
 `generate_vllm.py` runs in its own venv so the pinned training stack is untouched
 (vLLM pulls its own torch). Working recipe on this machine (no sudo, no gcc, no CUDA toolkit):
 

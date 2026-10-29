@@ -82,6 +82,17 @@ python eval/humaneval_eval.py gen --config gguf_q4km --gguf ckpt250-Q4_K_M.gguf 
 python eval/report_tables.py base_bf16 merged_bf16 gguf_q4km
 ```
 
+Converting needs `sentencepiece` in the Python that runs `convert_hf_to_gguf.py` (see [SETUP.md](SETUP.md)).
+
+**10. Analysis on saved answers** (no generation). Where the shipped model fails, the tuple-immutability probe (base vs
+shipped, both as Q4_K_M GGUFs on llama.cpp), and the scores as served with the typing import fix:
+
+```bash
+python eval/failure_analysis.py diagnose && python eval/failure_analysis.py table
+python eval/tuple_probe.py validate      # then gen / score / table, see the script's header
+python eval/humaneval_eval.py score --config gguf_q4km --served
+```
+
 The Q4_K_M GGUF scores **64.0%** HumanEval and **61.0%** HumanEval+, with 98.8% format-clean output (64.6% / 61.6% /
 99.4% as served, with the generation-time typing import fix in `data_pipeline/typing_fix.py`; not a retrain). The full results,
 including why accuracy did not really improve, are in [docs/eval_report.md](../docs/eval_report.md); the model's specs
@@ -93,8 +104,10 @@ are in [docs/model_card.md](../docs/model_card.md).
 python -m pytest training/tests -q
 ```
 
-These cover the format checks, the sandboxed assert runner, the HumanEval program assembly, and the label masking.
-The masking test needs `transformers` and skips without it; one case also needs the built dataset.
+These cover the format checks, the sandboxed assert runner, the HumanEval program assembly, the label masking, the
+typing import fix (shared cases with the playground's copy) and the tuple probe (reference solutions and the scorer).
+The masking test needs `torch`, `transformers` and the cached tokenizer, so CI leaves it out (`--ignore`); run it in the
+training environment.
 
 ## Attribution
 

@@ -17,6 +17,8 @@ AWS infrastructure as CloudFormation templates, deployed with the AWS SAM CLI (`
 | `scripts/killswitch.ps1` | Pause or resume the backend (kill flag plus Function URL auth) |
 | `scripts/live_tests_model.py` | Live checks against the deployed model: guardrails, error codes, SSE, CORS, status.json |
 | `scripts/live_tests_hardening.py` | Live checks: client-IP spoofing, warm-up rule, circuit breaker |
+| `scripts/live_tests_private.py` | The same guardrails with the Function URL kept locked to the public: SigV4-signed requests; `--breaker` trips the circuit breaker with real traffic |
+| `scripts/signing_proxy.py` | Local-only proxy that signs the playground's requests, so the real UI can be tested against the backend while the URL stays locked |
 | `scripts/bench_lambda.py`, `scripts/bench_coldstart.py` | Memory/thread and cold-start benchmarks behind [docs/backend_capacity.md](../docs/backend_capacity.md) |
 | `teardown.ps1` | Delete the backend stack, or everything with `-All` |
 
