@@ -32,6 +32,10 @@ for (const theme of THEMES) {
 // status.json says paused -> the page settles in replay mode; keyboard tests start from there
 async function settled(page: Page) {
   await page.goto("/");
+  // Replay is pressed from the first render now, so wait for status.json itself: until it arrives the Live toggle is
+  // still enabled and a keyboard walk races its switch to disabled (seen against the deployed site, not locally).
+  await expect(page.getByText("Live generation paused")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Live", exact: true })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Replay", exact: true })).toHaveAttribute("aria-pressed", "true");
 }
 
