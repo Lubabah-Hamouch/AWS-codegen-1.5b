@@ -34,8 +34,10 @@ Resources:
       Architectures: [arm64]
       MemorySize: !Ref MemoryMb
       Timeout: 90
-      # ReservedConcurrentExecutions is intentionally unset: this account's quota is 10 (AWS requires 100 unreserved).
-      # The application-level slots in guard.py are the concurrency cap until the quota increase is approved.
+      # Hard cap on simultaneous executions, refused requests included, so a flood cannot fan out across the account's
+      # 1000-execution limit before the circuit breaker reacts. Generations are capped separately at 2 by the slots in
+      # guard.py (max_concurrency); 10 leaves room for those, /health, the warm-up and requests the app refuses.
+      ReservedConcurrentExecutions: 10
       LoggingConfig: {LogGroup: !Ref LogGroup}
       Environment:
         Variables:

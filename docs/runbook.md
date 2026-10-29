@@ -50,13 +50,12 @@ in AWS's new sign-up experience: AWS manages its Organization SCPs, and everythi
 - After the breaker trips, recovery is manual: find the cause, then `killswitch.ps1 off`.
 - The deployed state is whatever `killswitch.ps1 status` says. As of 2026-10-29 it is live: layer 1 OFF, URL auth NONE.
 
-Concurrency: the account's Lambda limit is **1000** concurrent executions (checked 2026-10-29 with
-`aws lambda get-account-settings`; it was 10 when the backend was built, and the quota request to 1100 still reads
-CASE_OPENED). Generations are capped at 2 by the application's slot lock (`backend/app/guard.py`, `max_concurrency` in
-`config#global`). **Reserved concurrency is now possible but not set** on `codegen-backend` (`backend.yaml` still says
-the quota is 10), so the account limit no longer slows a flood of cheap refused requests; the circuit breaker
-(> 600 invocations in 5 minutes) is what stops one. Setting `ReservedConcurrentExecutions` would cap it outright; it is a
-backend stack change (`sam deploy`), not yet made.
+Concurrency: the account's Lambda limit is **1000** concurrent executions (it was 10 when the backend was built).
+`codegen-backend` has **reserved concurrency 10** (`ReservedConcurrentExecutions` in `backend.yaml`, deployed
+2026-10-29): at most 10 executions at once, refused requests included, so a flood cannot fan out across the account
+before the circuit breaker (> 600 invocations in 5 minutes) reacts. Generations are capped separately at 2 by the
+application's slot lock (`backend/app/guard.py`, `max_concurrency` in `config#global`). Requests beyond 10 get 429
+from Lambda itself (the page treats that like any other refusal).
 
 ## Guardrail state (DynamoDB table `codegen-state`)
 
