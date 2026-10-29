@@ -5,9 +5,10 @@ that streams its output and runs it.
 
 **Live site: https://d2js86b0xg0ozs.cloudfront.net**
 
-The site opens on **recorded real runs** (labelled as recordings, played back with their original timing). Live
-generation is **on** (since 2026-10-29): **Try it live** sends a request to the real model, up to 5 per visitor per day
-within a shared daily cap, and the operator can pause it at any time, in which case the site stays on recordings.
+The site opens on **recorded real runs** (labelled as recordings, played back with their original timing). When the
+operator has live generation on, **Try it live** opens the prompt box: the visitor picks an example or writes a
+prompt, and only **Run** sends it to the real model, up to 5 per visitor per day within a shared daily cap. While it is
+paused the site stays on recordings.
 
 ![The playground: a recorded fibonacci run flowing through spec, guard, model and stream, with the generated listing](docs/assets/playground.png)
 <sub>The playground with live generation on: a recorded run has just played back (the default); <b>Try it live</b> sits next to it.</sub>

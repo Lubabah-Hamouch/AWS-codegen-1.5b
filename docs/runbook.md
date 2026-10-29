@@ -4,8 +4,10 @@ Site: **https://d2js86b0xg0ozs.cloudfront.net** (playground and `/notes/`). Back
 
 ## Live and paused (quick reference)
 
-**Current state: live since 2026-10-29** (opened deliberately; `infra\scripts\killswitch.ps1 status` is the source of
-truth). Nothing switches it on or off on a schedule; only these commands and the circuit breaker do.
+**Current state: paused since 2026-10-29 01:45 UTC** (`infra\scripts\killswitch.ps1 status` is the source of truth).
+It was live from 00:19 to 01:45 UTC and was paused because Try it live sent a request on its own click, with the
+default example prompt; the fix (Try it live only opens the prompt box, Run sends) has to be deployed before it is
+opened again. Nothing switches it on or off on a schedule; only these commands and the circuit breaker do.
 
 ```powershell
 infra\scripts\killswitch.ps1 on                     # pause: both layers on, status.json -> paused (the site shows recordings)
@@ -14,9 +16,10 @@ curl.exe -m 150 https://sug6pvql5qkkk3tm7udviuyoc40jwvys.lambda-url.eu-north-1.o
 #                                                      then reload the site: "Try it live" appears in the intro
 ```
 
-- With the backend on, the site still opens in replay mode (and plays a recording on a first visit). A live request
-  happens only when a visitor presses **Try it live**, which appears in the intro only while status.json says live
-  and becomes the reset time once that visitor's runs for the day are used.
+- With the backend on, the site still opens in replay mode (and plays a recording on a first visit). **Try it live**
+  (shown only while status.json says live) switches to Live mode and focuses the prompt box; it sends nothing. A live
+  request happens only when the visitor presses **Run** (or Ctrl+Enter). Once that visitor's runs for the day are used,
+  the button becomes the reset time.
 - **The warm-up is not optional.** If the function is cold, the first visitor waits 4-9 s for the first token. `{"ready": true}`
   means warm. It works while the kill switch is ON, so it can come first.
 - **Reload pages that were already open.** The site reads status.json once on load; an open tab stays in replay mode.
@@ -48,7 +51,8 @@ in AWS's new sign-up experience: AWS manages its Organization SCPs, and everythi
 - `killswitch.ps1 on` engages both layers. A later `sam deploy` resets layer 2 to the template (`AuthType: NONE`).
 - Both layers cut off traffic but do not stop an invocation already running; the longest is the 90 s function timeout.
 - After the breaker trips, recovery is manual: find the cause, then `killswitch.ps1 off`.
-- The deployed state is whatever `killswitch.ps1 status` says. As of 2026-10-29 it is live: layer 1 OFF, URL auth NONE.
+- The deployed state is whatever `killswitch.ps1 status` says. As of 2026-10-29 01:45 UTC it is paused: layer 1 ON,
+  URL auth AWS_IAM.
 
 Concurrency: the account's Lambda limit is **1000** concurrent executions (it was 10 when the backend was built).
 `codegen-backend` has **reserved concurrency 10** (`ReservedConcurrentExecutions` in `backend.yaml`, deployed
@@ -239,7 +243,7 @@ Not in CI: GPU training, real-model evals, the Lambda image and stacks, and the 
   `python infra/scripts/signing_proxy.py` (127.0.0.1 only; signs requests with the operator's credentials) and
   `BASE_URL=<site or local build> PRIVATE_PROXY=http://127.0.0.1:8787 npx playwright test tests/e2e/private-live.spec.ts`;
   afterwards `seed_state.py --kill on`. The proxy hands the answer over in one piece, so the page's first-token time
-  and rate trace are not meaningful in this test (the server-measured numbers are). Run 2026-10-29: Try it live sent
+  and rate trace are not meaningful in this test (the server-measured numbers are). Run 2026-10-29 (when Try it live still sent on click): it sent
   one request, 106 tokens, clean EOS, 5/5 checks. The alarm returns to OK on its own about 5 minutes later; the breaker
   only acts on a new transition into ALARM, so check it is OK before relying on it again.
 

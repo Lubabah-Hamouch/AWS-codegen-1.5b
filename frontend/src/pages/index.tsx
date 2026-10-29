@@ -185,12 +185,27 @@ export default function Playground() {
     : null;
 
   // The opt-in: a real request with the prompt in U1, spending one of the visitor's live runs.
+  // Choosing live never sends anything: it switches the mode and takes the visitor to the prompt box. A request goes
+  // out only when they press Run (or Ctrl+Enter). Switching also cancels a first-visit recording still loading, so it
+  // cannot start playing over a visitor who is about to write a prompt.
+  const chooseMode = (m: Mode) => {
+    if (m === "live") runSeq.current++;
+    setMode(m);
+  };
+  const [focusPrompt, setFocusPrompt] = useState(0);
   const tryLive = () => {
     if (active(run) || liveBlocked) return;
-    setMode("live");
-    runLive();
-    showOutput();
+    chooseMode("live");
+    setFocusPrompt((n) => n + 1);
   };
+  useEffect(() => {
+    if (!focusPrompt || mode !== "live") return;
+    const spec = document.getElementById("spec");
+    if (!spec) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    spec.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+    spec.focus({ preventScroll: true });
+  }, [focusPrompt, mode]);
 
   const onRun = () => (mode === "live" ? runLive() : runReplay());
   const retryIn = retryAt !== null ? Math.max(0, Math.ceil((retryAt - now) / 1000)) : null;
@@ -237,7 +252,7 @@ export default function Playground() {
         <Readouts run={run} />
 
         <SignalPath
-          run={run} mode={mode} liveAllowed={liveAllowed} onMode={setMode}
+          run={run} mode={mode} liveAllowed={liveAllowed} onMode={chooseMode}
           prompt={prompt} onPrompt={setPrompt}
           replays={replays} replayId={replayId} onReplay={setReplayId}
           onRun={onRun} onStop={() => stopRef.current()}

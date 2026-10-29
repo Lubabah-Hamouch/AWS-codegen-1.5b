@@ -82,7 +82,7 @@ test("quota used up: Run is replaced in place by the reset time and a replay but
   await expect(page.getByLabel("Generated code")).toContainText("def fibonacci", { timeout: 15_000 });
 });
 
-test("Try it live: replay stays the default, the button sends one real request", async ({ page }) => {
+test("Try it live: replay stays the default; the button opens the prompt and Run sends one request", async ({ page }) => {
   let calls = 0;
   await page.route("**/status.json", (r) => r.fulfill({ contentType: "application/json", body: '{"live": true, "since": "x", "note": "live"}' }));
   await page.route("**/generate", (r) => (r.request().method() === "OPTIONS" ? r.fulfill({ status: 204, headers: cors(r) }) : (calls++, stream(r))));
@@ -97,6 +97,10 @@ test("Try it live: replay stays the default, the button sends one real request",
   await page.waitForTimeout(500);
   expect(calls).toBe(0); // nothing live happens by itself
   await page.getByRole("button", { name: "Try it live ▸" }).click();
+  await expect(page.locator("#spec")).toBeFocused(); // the prompt box, ready for a choice
+  await page.waitForTimeout(1000);
+  expect(calls).toBe(0); // choosing live sends nothing
+  await page.locator("#controls").getByRole("button", { name: "Run ▸", exact: true }).click();
   await expect(page.getByLabel("Generated code")).toContainText("def fibonacci", { timeout: 15_000 });
   await expect(page.getByText("clean EOS")).toBeVisible({ timeout: 15_000 });
   expect(calls).toBe(1);
@@ -127,4 +131,27 @@ test("a typing name used but not imported: the import is added, marked, and used
   await page.getByRole("button", { name: "Run code ▸" }).click();
   await expect(page.locator(".bench-sum")).not.toContainText("NameError", { timeout: 90_000 });
   await expect(page.locator(".bench-sum")).toContainText(/transpose/, { timeout: 90_000 });
+});
+
+test("nothing is sent until Run: load, the Live toggle, examples and Try it live send no request", async ({ page }) => {
+  const sent: string[] = [];
+  await page.route("**/status.json", (r) => r.fulfill({ contentType: "application/json", body: '{"live": true, "since": "x", "note": "live"}' }));
+  await page.route("**/generate", (r) => {
+    if (r.request().method() === "OPTIONS") return r.fulfill({ status: 204, headers: cors(r) });
+    sent.push(JSON.parse(r.request().postData() ?? "{}").prompt);
+    return stream(r);
+  });
+  await page.goto("/");
+  await expect(page.getByText("Live generation is on")).toBeVisible();
+  await page.getByRole("button", { name: "Live", exact: true }).click();
+  await page.locator("#controls .chips button").nth(1).click(); // the palindrome example
+  await page.getByRole("button", { name: "Replay", exact: true }).click();
+  await page.getByRole("button", { name: "Try it live ▸" }).click();
+  await expect(page.locator("#spec")).toBeFocused();
+  await page.waitForTimeout(2000);
+  expect(sent).toEqual([]);
+  await page.locator("#controls").getByRole("button", { name: "Run ▸", exact: true }).click(); // the one explicit send
+  await expect(page.getByText("clean EOS")).toBeVisible({ timeout: 15_000 });
+  expect(sent).toHaveLength(1);
+  expect(sent[0]).toMatch(/palindrome/); // the example the visitor picked, not a default
 });

@@ -11,7 +11,8 @@ test("live run from the deployed origin: streams, or shows a coded refusal", asy
   await page.goto("/");
   // replay is the default; the live request is the visitor's opt-in
   await expect(page.getByRole("button", { name: "Replay", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Try it live ▸" }).click();
+  await page.getByRole("button", { name: "Try it live ▸" }).click(); // opens the prompt; nothing is sent yet
+  await page.locator("#controls").getByRole("button", { name: "Run ▸", exact: true }).click();
   const code = page.getByLabel("Generated code");
   const refusal = page.locator(".banner[role=alert]");
   await expect(code.or(refusal)).toBeVisible({ timeout: 30_000 });

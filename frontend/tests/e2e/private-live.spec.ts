@@ -20,7 +20,9 @@ test("Try it live, end to end against the real model: streams, finishes cleanly,
   });
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Replay", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: "Try it live ▸" }).click();
+  await page.getByRole("button", { name: "Try it live ▸" }).click(); // opens the prompt; nothing is sent yet
+  expect(sent).toBe(0);
+  await page.locator("#controls").getByRole("button", { name: "Run ▸", exact: true }).click();
   await expect(page.getByText("clean EOS")).toBeVisible({ timeout: 150_000 });
   expect(sent).toBe(1);
   await expect(page.getByLabel("Generated code")).toContainText("def fibonacci");

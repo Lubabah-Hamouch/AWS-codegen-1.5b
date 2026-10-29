@@ -50,8 +50,9 @@ export function Intro({ status, playing, onWatch, live, liveBlocked, remaining, 
         {live && !liveBlocked && (
           <p className="intro-status">
             <strong className="silk au">Live generation is on</strong>{" "}
-            Try it live sends the prompt to the real model on AWS Lambda
-            ({remaining ?? BUDGET.anonPerIp} of {BUDGET.anonPerIp} live runs left today; a cold start can add 5–10 s). Replays cost nothing.
+            Try it live opens the prompt box: pick an example or write your own, then press Run to send it to the real
+            model on AWS Lambda ({remaining ?? BUDGET.anonPerIp} of {BUDGET.anonPerIp} live runs left today; a cold start
+            can add 5–10 s). Nothing is sent until you press Run. Replays cost nothing.
           </p>
         )}
         {status.live === false && (

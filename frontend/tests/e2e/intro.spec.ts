@@ -156,7 +156,8 @@ test("first visit, backend on: pressing Try it live while the autoplay recording
   const autoplayFetch = page.waitForRequest("**/replays/fibonacci.json");
   await page.goto("/");
   await autoplayFetch; // the first-visit autoplay has started loading its recording (held 1.5 s above)...
-  await page.getByRole("button", { name: "Try it live ▸" }).click(); // ...and the visitor opts into live meanwhile
+  await page.getByRole("button", { name: "Try it live ▸" }).click(); // ...the visitor opts into live meanwhile...
+  await page.locator("#controls").getByRole("button", { name: "Run ▸", exact: true }).click(); // ...and sends the prompt
   await expect(page.getByText("server 0.77 s")).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(3000); // past the moment the delayed recording arrives
   await expect(page.getByText("server 0.77 s")).toBeVisible();
